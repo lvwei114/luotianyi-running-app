@@ -1,0 +1,18 @@
+.gradle/
+.kotlin/
+.idea/
+local.properties
+**/build/
+*.apk
+*.aab
+*.jks
+*.keystore
+.env
+.env.*
+*.log
+
+# Parent repository ignores folders named data; these contain application source.
+!app/src/main/java/com/luotianyi/running/nativeapp/data/
+!app/src/main/java/com/luotianyi/running/nativeapp/data/**
+!app/src/test/java/com/luotianyi/running/nativeapp/data/
+!app/src/test/java/com/luotianyi/running/nativeapp/data/**

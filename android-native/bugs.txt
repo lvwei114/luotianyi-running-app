@@ -1,0 +1,91 @@
+洛天依陪跑（luotianyi-running-native）Bug 检查报告
+检查日期：2026-10-08
+检查范围：app/src/main 全部 34 个源文件 + 资源清单；compileDebugKotlin 与全部单元测试均通过，
+以下问题均为编译期与现有测试未覆盖的运行时逻辑 / 资源问题。
+
+================================================================
+一、实际 Bug（按严重程度排序）
+================================================================
+
+1. 心率警告语音文件缺失，会静默退化为系统 TTS
+   位置：service/RunService.kt:135
+   代码以语音 id "hr_warning" 调用 app.voice.speak(...)，但 assets/voices/ 目录下
+   不存在 hr_warning.wav。触发心率超标提醒时，VoicePlayer.next() 中
+   context.assets.openFd("voices/hr_warning.wav") 抛异常，被 catch 后走 TTS 回退，
+   导致这条提醒用系统合成音而不是天依语音，与其余所有提示音不一致。
+   建议：补上 hr_warning.wav 资源文件。
+   顺带发现：chat_*、hr_l1_a~hr_l3_b、hr_ok_*、time_60/90/long_*、warmup_*、
+   cooldown_*、skip_cooldown_*、start_a/b、water_b/c、water_before/after 等约 20 个
+   wav 从未被任何代码引用，属于无用资源，白白增加 APK 体积（这些文件在
+   app/build.gradle.kts 中被 noCompress "wav" 排除压缩，体积影响更大）。
+
+2. GPS 预热阶段若系统定位未开启，整段训练都收不到定位
+   位置：service/RunService.kt:171
+   startMeasurements() 只在“开始测量那一刻 GPS provider 已启用”时才注册监听：
+       if (fine && locations?.isProviderEnabled(GPS_PROVIDER) == true)
+           locations?.requestLocationUpdates(...)
+   如果用户开跑时定位是关闭的，即使训练途中打开定位，onProviderEnabled 回调也不会
+   触发（根本没注册这个 listener，回调无从送达），本次训练全程无有效 GPS 距离。
+   建议：权限允许时无论如何都先 requestLocationUpdates，靠 onProviderDisabled /
+   onProviderEnabled 维护状态；或在 onProviderEnabled 里补注册。
+
+3. NativeMetronome 的 start/stop 竞态：节拍器可能在 RUNNING 状态下无声停摆
+   位置：audio/NativeMetronome.kt:15-33
+   stop() 只是把 @Volatile playing 置 false，再 worker?.join(300)。工作线程退出时的
+   finally 块会无条件执行 playing=false; track=null。
+   若在 join 超时后旧线程仍未真正结束（AudioTrack 阻塞写入未及时返回等），紧接着
+   start() 又把 playing 置 true 并起了新线程，旧线程随后跑的 finally 会把 playing
+   改回 false —— 新线程写完当前 PCM 缓冲就退出，节拍器停止发声但 UI/状态毫无提示。
+   触发场景：暂停后快速恢复训练。
+   建议：引入 generation/token 计数，线程 finally 只在 generation 仍属于自己时才
+   复位 playing 与 track。
+
+4. 检查点恢复失败会永久锁死训练入口，且没有丢弃记录的出口
+   位置：RunningApplication.kt:41-53、service/RunService.kt:57、ui/Screens.kt:39
+   recoverCheckpoint() 把检查点交给 WorkoutRepository.save()，而 save() 内有一串
+   require(...) 校验（gpsStepMeters 范围、TIMED 必填 timedMinutes 等）。
+   若检查点文件内容不合法（写盘时进程被杀留下的半新状态、字段异常），save 必然抛
+   IllegalArgumentException，于是 recoveryError 被设置；RunService.START 分支遇到
+   recoveryError 非空就 stopSelf()，UI 的“开始跑步”按钮也禁用。
+   而 retryRecovery() 重试读的是同一个文件，永远失败 —— 用户被彻底卡在无法开始新训练
+   的状态，界面上也没有“丢弃这条损坏记录”的选项。
+   建议：恢复失败时提供“放弃并清除检查点”操作，或 save 前先做字段清洗。
+
+================================================================
+二、次要问题
+================================================================
+
+5. 相同的错误/提示消息第二次不会再弹出
+   位置：RunningApplication.kt:33、ui/AppViewModel.kt:46
+   app.message 是 MutableStateFlow 且从不清空，StateFlow 对相同值不重复 emit。
+   第一次“运动操作失败：xxx”显示后，若同一错误再次发生（内容完全相同），
+   AppViewModel 的 collect 收不到新值，Snackbar 不再出现，用户以为没有再次失败。
+
+6. 音乐错误提示是粘性的，之后正常播放也不消失
+   位置：audio/MusicManager.kt:33,39,53
+   mutable 中的 error（“部分音频缺失，请重新导入”“播放失败：xxx”“无法获得音频播放
+   权限”）只在 setQueue() 时整体重置。onPlayerError 置错后，后续 play()/next() 成功
+   也不清除；onIsPlayingChanged、onPlayerError 之外的路径同样不清。MiniPlayer 会一直
+   显示一条已经过时的错误。
+
+7. 设置滑块在拖动过程中逐像素写 DataStore（写入风暴）
+   位置：ui/Screens.kt:42（customBpm）、ui/Screens.kt:71（StageRatios 占比）、
+   ui/SettingsScreen.kt:101（VolumeSlider）
+   onValueChange 里直接调用 vm.settings { ... }，一次拖动产生几十上百次 JSON 序列化 +
+   DataStore 磁盘写。应只在 onValueChangeFinished 提交，拖动期间仅更新本地 state。
+
+8. AudioFocusOwner.previewActive 是死代码，试听节拍音色不申请音频焦点
+   位置：audio/AudioFocusOwner.kt:15、ui/AppViewModel.kt:126-130
+   previewActive 声明后从未被置 true；releaseIfIdle() 的判断形同虚设。
+   previewTone() 直接起 NativeMetronome 播放 950ms，既不 acquire() 音频焦点也不
+   duck 音乐，若后台正在播放音乐会与试听声硬叠。
+
+================================================================
+三、验证情况
+================================================================
+- ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest → BUILD SUCCESSFUL，
+  7 个测试类（WorkoutMachine / DistanceTracker / BpmEstimator / BeatSynth /
+  HeartRatePacket / WorkoutMetrics / RepositoryIntegration / NavigationUi）全部通过。
+- 上述 1、2、3、5、6、8 属于现有测试未覆盖的运行时行为；4 依赖异常数据场景。
+- 资源引用核对：manifest 中 @drawable/app_icon 与 @drawable/ic_launcher 均存在；
+  代码使用的语音 id 中仅 hr_warning 缺文件（见问题 1）。

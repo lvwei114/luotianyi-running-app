@@ -1,0 +1,126 @@
+package com.luotianyi.running.nativeapp.ui
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import com.luotianyi.running.nativeapp.MainActivity
+import com.luotianyi.running.nativeapp.RunningApplication
+import com.luotianyi.running.nativeapp.domain.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.filter
+import java.io.File
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.LooperMode
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk=[35],qualifiers="w390dp-h844dp-mdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@LooperMode(LooperMode.Mode.PAUSED)
+class NavigationUiTest {
+    @get:Rule val compose=createAndroidComposeRule<MainActivity>()
+    @Test @Config(qualifiers="w360dp-h640dp-mdpi")
+    fun acceptedWorkoutOpensSeparateScreenAndCanBeMinimizedWithoutStopping() {
+        dismissIntroduction()
+        val app=compose.activity.application as RunningApplication
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(sessionId="navigation-session",training=TrainingState(phase=RunPhase.RUNNING,mode=RunMode.TIMED,elapsedMs=60000),gpsMeters=1234.0)}
+        compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();compose.onAllNodesWithTag("run-hero").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("run-hero").assertIsDisplayed()
+        compose.onNodeWithText("距离").assertIsDisplayed();compose.onNodeWithText("运动时间").assertIsDisplayed()
+        compose.onNode(hasText("首页") and hasClickAction()).assertDoesNotExist()
+        capture("workout-small")
+        compose.runOnUiThread {app.voice.speak("jiayou","加油哦，天依相信你！")}
+        compose.onNodeWithText("天依：加油哦，天依相信你！").assertIsDisplayed()
+        capture("workout-toast-small")
+        compose.runOnUiThread {app.voice.cancel()}
+        compose.onNodeWithText("收起跑步界面").performClick()
+        compose.onNodeWithText("返回跑步界面").assertIsDisplayed()
+        org.junit.Assert.assertEquals(RunPhase.RUNNING,app.runState.value.training.phase)
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(training=app.runState.value.training.copy(phase=RunPhase.PAUSED))}
+        compose.onNodeWithText("返回跑步界面").assertIsDisplayed()
+        compose.onNodeWithTag("run-hero").assertDoesNotExist()
+        compose.onNode(hasText("跑步") and hasClickAction()).performClick()
+        compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
+        compose.onNodeWithText("返回跑步界面").performClick()
+        compose.onNodeWithTag("run-hero").assertIsDisplayed()
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(training=app.runState.value.training.copy(phase=RunPhase.FINISHED))}
+        compose.onNodeWithTag("run-hero").assertDoesNotExist()
+        compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
+    }
+    @Test fun corruptCheckpointCanBeDiscardedOnlyAfterConfirmation() {
+        dismissIntroduction()
+        val app=compose.activity.application as RunningApplication
+        val checkpoint=File(app.filesDir,"active_workout.json")
+        compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();!app.recovering.value}
+        compose.runOnUiThread {checkpoint.writeText("broken-json");org.junit.Assert.assertThrows(org.json.JSONException::class.java) {app.checkpoint.read()};app.retryRecovery()}
+        compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();app.runState.value.recoveryError.isNotEmpty() && !app.recovering.value}
+        compose.onNodeWithText("放弃上次记录").performClick()
+        compose.onNodeWithText("取消").performClick();org.junit.Assert.assertTrue(checkpoint.exists())
+        compose.onNodeWithText("放弃上次记录").performClick();compose.onNodeWithText("确认放弃").performClick()
+        compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();!checkpoint.exists() && app.runState.value.recoveryError.isEmpty() && !app.recovering.value}
+        compose.onNode(hasText("开始跑步") and hasClickAction()).assertIsEnabled()
+    }
+    @Test fun identicalMessagesAreBothDelivered() {
+        val app=compose.activity.application as RunningApplication
+        val received=mutableListOf<String>()
+        val job=CoroutineScope(Dispatchers.Unconfined).launch {app.message.filter {it=="重复错误"}.take(2).collect {received.add(it)}}
+        try {
+            compose.runOnUiThread {app.postMessage("重复错误");app.postMessage("重复错误")}
+            org.junit.Assert.assertEquals(listOf("重复错误","重复错误"),received)
+        } finally {job.cancel()}
+    }
+    @Test fun allFourNativePagesKeepNavigationAndRender() {
+        dismissIntroduction()
+        capture("home")
+        for(tab in listOf("音乐","跑步","设置","首页")) {
+            compose.onNode(hasText(tab) and hasClickAction()).performClick()
+            compose.waitForIdle()
+            for(label in listOf("首页","跑步","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
+            capture(when(tab) {"音乐"->"music";"跑步"->"run";"设置"->"settings";else->"home"})
+            if(tab=="跑步")compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
+        }
+    }
+    @Test @Config(qualifiers="w360dp-h640dp-mdpi")
+    fun smallScreenAndFinishedTimedWorkoutKeepLegacyChoicesAvailable() {
+        dismissIntroduction()
+        compose.runOnUiThread {
+            val app=compose.activity.application as RunningApplication
+            app.runState.value=app.runState.value.copy(training=TrainingState(phase=RunPhase.FINISHED,mode=RunMode.TIMED))
+        }
+        compose.waitForIdle()
+        compose.onNode(hasText("跟天依跑") and hasClickAction()).assertIsEnabled()
+        compose.onNode(hasText("天依跟你跑") and hasClickAction()).assertIsEnabled()
+        compose.onNode(hasText("自定义 BPM") and hasClickAction()).assertIsEnabled()
+        capture("home-small")
+        for(tab in listOf("音乐","跑步","设置")) {
+            compose.onNode(hasText(tab) and hasClickAction()).performClick();compose.waitForIdle()
+            for(label in listOf("首页","跑步","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
+            capture(when(tab) {"音乐"->"music-small";"跑步"->"run-small";else->"settings-small"})
+        }
+    }
+    private fun dismissIntroduction() {
+        compose.waitUntil(15000) {
+            (compose.activity.application as RunningApplication).latestSettings.disclaimerAccepted || compose.onAllNodesWithText("我已了解").fetchSemanticsNodes().isNotEmpty()
+        }
+        if(compose.onAllNodesWithText("我已了解").fetchSemanticsNodes().isNotEmpty())compose.onNodeWithText("我已了解").performClick()
+        compose.waitUntil(15000) {compose.onAllNodesWithText("我已了解").fetchSemanticsNodes().isEmpty()}
+        compose.waitForIdle()
+    }
+    private fun capture(name:String) {
+        val file=File("build/qa/native-$name.png");file.parentFile?.mkdirs()
+        file.outputStream().use {output ->
+            // Robolectric has no compositor for PixelCopy; draw the actual native view tree.
+            compose.runOnUiThread {
+                val view=compose.activity.window.decorView
+                val bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(bitmap))
+                bitmap.compress(Bitmap.CompressFormat.PNG,100,output)
+                bitmap.recycle()
+            }
+        }
+    }
+}

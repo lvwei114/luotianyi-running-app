@@ -1,5 +1,18 @@
 # 洛天依陪跑 · RUN
 
+> **安卓原生版 · 绿卫维护的 Fork**
+>
+> 原生版作者：绿卫；原项目作者：Cory。本 Fork 保留原项目与提交历史，新增 Kotlin + Jetpack Compose 安卓原生版，源码位于 [`android-native/`](android-native/)。
+>
+> [下载 v0.1.3 测试 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.3-native-test) · [原生版功能与构建说明](android-native/README.md) · [最近更新](android-native/docs/v0.1.3改进说明.md)
+>
+> 原生版支持独立定时跑、批量歌单导入、GPS 距离记录、平均步频与步幅、记录分析、顶部语音浮窗和自选背景。维护者已反馈真机验证通过。
+>
+> 以下为原项目说明。
+
+---
+
+
 > 洛天依语音陪跑应用 —— 节拍器 + 心率监测 + 音乐播放 + 语音引导，让跑步不再孤单
 
 **当前版本：v1.2**（2026-09-19） · [更新日志](CHANGELOG.md) · [给观众的介绍](B站介绍-v1.2.md)
