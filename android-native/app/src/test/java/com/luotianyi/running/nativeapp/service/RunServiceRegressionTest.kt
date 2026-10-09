@@ -20,6 +20,36 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[28])
 class RunServiceRegressionTest {
+    @Test fun livePaceNeedsGpsMovementAndClearsOnStopPauseAndDisabledProvider() {
+        val app=RuntimeEnvironment.getApplication() as RunningApplication
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION,"${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        app.recovering.value=false;app.runState.value=RunState()
+        val controller=Robolectric.buildService(RunService::class.java,Intent(app,RunService::class.java).setAction("START").putExtra("mode","CUSTOM")).create()
+        fun command(action:String)=controller.get().onStartCommand(Intent(app,RunService::class.java).setAction(action).putExtra("sessionId",app.runState.value.sessionId),0,2)
+        fun fix(meters:Double,speed:Float) {
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(1))
+            controller.get().onLocationChanged(Location(LocationManager.GPS_PROVIDER).apply {
+                latitude=0.0;longitude=meters/111195;accuracy=5f;this.speed=speed
+                elapsedRealtimeNanos=SystemClock.elapsedRealtimeNanos();time=System.currentTimeMillis()
+            })
+        }
+        try {
+            controller.startCommand(0,1);command("SKIP")
+            assertEquals(com.luotianyi.running.nativeapp.domain.RunPhase.RUNNING,app.runState.value.training.phase)
+            repeat(6) {fix(if(it%2==0).5 else -.5,1.2f);assertNull(app.runState.value.pace)}
+            repeat(7) {fix(it*2.5,2.5f)}
+            assertEquals(400.0,app.runState.value.pace!!,.1)
+            fix(15.0,0f);assertNull(app.runState.value.pace)
+            assertTrue(app.runState.value.gpsMeters>0)
+            repeat(7) {fix(15+it*2.5,2.5f)}
+            assertNotNull(app.runState.value.pace)
+            command("PAUSE");assertNull(app.runState.value.pace)
+            command("RESUME");assertNull(app.runState.value.pace)
+            repeat(7) {fix(30+it*2.5,2.5f)}
+            assertNotNull(app.runState.value.pace)
+            controller.get().onProviderDisabled(LocationManager.GPS_PROVIDER);assertNull(app.runState.value.pace)
+        } finally {controller.destroy()}
+    }
     @Test fun successfulMusicPlaybackClearsPreviousError() {
         val app=RuntimeEnvironment.getApplication() as RunningApplication
         shadowOf(app).grantPermissions("${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")

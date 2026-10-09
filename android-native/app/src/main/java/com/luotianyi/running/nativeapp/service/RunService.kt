@@ -24,6 +24,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
     private val app get()=application as RunningApplication
     private val machine=WorkoutMachine()
     private var gps=RunDistanceTracker(0,false);private var live=RunDistanceTracker(0,true)
+    private val livePace=GpsPaceTracker()
     private var locations:LocationManager?=null;private var sensors:SensorManager?=null
     private var stepSensor=false;private var above=false;private var lastStep=0L;private var confirmation=0
     private var wakeLock:PowerManager.WakeLock?=null
@@ -57,7 +58,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
                     if(app.recovering.value || app.runState.value.recoveryError.isNotEmpty() || app.runState.value.saveError.isNotEmpty()) {stopSelf();return START_NOT_STICKY}
                     settings=app.latestSettings
                     val mode=RunMode.fromStored(intent.getStringExtra("mode"));id=UUID.randomUUID().toString()
-                    val now=SystemClock.elapsedRealtime();gps=RunDistanceTracker(now,false);live=RunDistanceTracker(now,true);live.strideLength=settings.estimatedStride
+                    val now=SystemClock.elapsedRealtime();gps=RunDistanceTracker(now,false);live=RunDistanceTracker(now,true);live.strideLength=settings.estimatedStride;livePace.reset()
                     samples.clear();lastHrSample=-5000;lastStage=-1;startedAt=0;finalizing=false;lastNotice=0;dangerAt=0;lastCheckpoint=0;previousMusic=false;cheerBag.clear()
                     machine.prepare(mode,settings,app.music.state.value.queue.sumOf {it.durationMillis});app.runState.value=RunState(sessionId=id,training=machine.state,status="GPS 预热中，可跳过等待")
                     foreground();startMeasurements();preparingAt=now
@@ -89,7 +90,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
         if(!app.audioFocus.acquire()) {app.postMessage("暂时无法播放训练音频");return}
         app.runState.value=app.runState.value.copy(status=if(gps.fresh(SystemClock.elapsedRealtime()))"" else "等待 GPS，缺失路段不会计入记录")
         preparingAt=0;preparationJob?.cancel();startedAt=System.currentTimeMillis()
-        val now=SystemClock.elapsedRealtime();machine.start(now);gps.setRunning(true,now);live.setRunning(true,now);confirmation=0;above=false
+        val now=SystemClock.elapsedRealtime();machine.start(now);gps.setRunning(true,now);live.setRunning(true,now);livePace.reset();confirmation=0;above=false
         app.audioFocus.workoutActive=true;acquireWakeLock();beat.bpm=machine.state.bpm;beat.volume=settings.masterVolume/100f*settings.beatVolume/100f;beat.tone=settings.beatTone;beat.start()
         app.music.repeatWorkout=machine.state.mode==RunMode.TIMED;app.music.playedIds.clear()
         if(machine.state.mode==RunMode.FOLLOW) {app.music.setMode("smart");scope.launch {app.settingsRepository.update {it.copy(musicMode="smart")}}}
@@ -102,14 +103,14 @@ class RunService:Service(),LocationListener,SensorEventListener {
         if(machine.state.phase!=RunPhase.RUNNING)return
         val now=SystemClock.elapsedRealtime();machine.pause(now)
         if(machine.state.phase==RunPhase.FINISHED) {finishWorkout();return}
-        gps.setRunning(false,now);live.setRunning(false,now);beat.stop();releaseWakeLock()
+        gps.setRunning(false,now);live.setRunning(false,now);livePace.reset();beat.stop();releaseWakeLock()
         previousMusic=app.music.player.isPlaying;app.music.player.pause();app.audioFocus.workoutActive=false;app.audioFocus.releaseIfIdle()
         app.voice.cancel();if(announce)app.voice.speak("zanting","运动暂停，休息一下再继续吧");checkpoint();publish()
     }
     private fun resume() {
         if(machine.state.phase!=RunPhase.PAUSED)return
         if(!app.audioFocus.acquire())return
-        val now=SystemClock.elapsedRealtime();machine.resume(now);gps.setRunning(true,now);live.setRunning(true,now);above=false;confirmation=0;dangerAt=0
+        val now=SystemClock.elapsedRealtime();machine.resume(now);gps.setRunning(true,now);live.setRunning(true,now);livePace.reset();above=false;confirmation=0;dangerAt=0
         app.audioFocus.workoutActive=true;acquireWakeLock();beat.start();if(previousMusic)app.music.play();app.voice.cancel();app.voice.speak("kaishi","继续运动，加油呀！");publish()
     }
     private fun tick() {
@@ -153,7 +154,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
         if(finalizing)return
         if(machine.state.phase==RunPhase.PREPARING) {cleanup();app.runState.value=RunState(status="已取消准备");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return}
         if(startedAt==0L)return
-        finalizing=true;val now=SystemClock.elapsedRealtime();machine.finish(now);gps.setRunning(false,now);live.setRunning(false,now)
+        finalizing=true;val now=SystemClock.elapsedRealtime();machine.finish(now);gps.setRunning(false,now);live.setRunning(false,now);livePace.reset()
         beat.stop();releaseWakeLock();app.music.player.pause();app.music.repeatWorkout=false;app.audioFocus.workoutActive=false;app.audioFocus.releaseIfIdle();app.voice.cancel();app.voice.speak("jieshu","训练完成啦，记得拉伸放松哦")
         app.heartRate.freshBpm()?.takeIf {settings.withWearable}?.let {hr->if(samples.lastOrNull()?.elapsedMillis!=machine.state.elapsedMs)samples.add(HeartRateSampleEntity(id,machine.state.elapsedMs,hr))}
         val w=record();val hr=samples.toList();publish();app.runState.value=app.runState.value.copy(completed=w,samples=hr,saving=true)
@@ -164,7 +165,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
         }
     }
     private fun publish() {
-        val now=SystemClock.elapsedRealtime();app.runState.value=app.runState.value.copy(sessionId=id,training=machine.state,gpsMeters=gps.gpsMeters,steps=gps.steps,accuracy=gps.accuracy,gpsFresh=gps.fresh(now),liveEstimatedMeters=live.estimatedMeters,gpsStepMeters=gps.gpsStepMeters,gpsSteps=gps.gpsSteps,heartRate=app.heartRate.freshBpm().takeIf {settings.withWearable},pace=gps.speed?.takeIf {gps.fresh(now) && it>=.35}?.let {1000/it})
+        val now=SystemClock.elapsedRealtime();app.runState.value=app.runState.value.copy(sessionId=id,training=machine.state,gpsMeters=gps.gpsMeters,steps=gps.steps,accuracy=gps.accuracy,gpsFresh=gps.fresh(now),liveEstimatedMeters=live.estimatedMeters,gpsStepMeters=gps.gpsStepMeters,gpsSteps=gps.gpsSteps,heartRate=app.heartRate.freshBpm().takeIf {settings.withWearable},pace=if(machine.state.phase==RunPhase.RUNNING && gps.fresh(now))livePace.pace(now) else null)
     }
     @SuppressLint("MissingPermission") private fun startMeasurements() {
         val fine=ContextCompat.checkSelfPermission(this,Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED
@@ -182,9 +183,14 @@ class RunService:Service(),LocationListener,SensorEventListener {
         if(location.provider!=LocationManager.GPS_PROVIDER)return
         val now=SystemClock.elapsedRealtime();if(machine.state.phase==RunPhase.RUNNING) {machine.tick(now,app.heartRate.freshBpm(),false);if(machine.state.phase==RunPhase.FINISHED) {finishWorkout();return}}
         val time=location.elapsedRealtimeNanos/1_000_000;val accuracy=if(location.hasAccuracy())location.accuracy.toDouble() else Double.NaN;val speed=if(location.hasSpeed())location.speed.toDouble() else null
-        val valid=gps.fix(location.latitude,location.longitude,accuracy,speed,time,now);live.fix(location.latitude,location.longitude,accuracy,speed,time,now);if(valid)app.runState.value=app.runState.value.copy(status="");publish()
+        val valid=gps.fix(location.latitude,location.longitude,accuracy,speed,time,now);live.fix(location.latitude,location.longitude,accuracy,speed,time,now)
+        if(valid) {
+            app.runState.value=app.runState.value.copy(status="")
+            if(machine.state.phase==RunPhase.RUNNING)livePace.fix(location.latitude,location.longitude,accuracy,speed,time,now,if(location.hasSpeedAccuracy())location.speedAccuracyMetersPerSecond.toDouble() else null)
+        }
+        publish()
     }
-    override fun onProviderDisabled(provider:String) {app.runState.value=app.runState.value.copy(status="定位关闭，记录距离不会补算");publish()}
+    override fun onProviderDisabled(provider:String) {if(provider==LocationManager.GPS_PROVIDER)livePace.reset();app.runState.value=app.runState.value.copy(status="定位关闭，记录距离不会补算");publish()}
     override fun onProviderEnabled(provider:String) {app.runState.value=app.runState.value.copy(status="等待 GPS 信号")}
     @Deprecated("Platform API") override fun onStatusChanged(provider:String?,status:Int,extras:Bundle?) {}
     override fun onSensorChanged(event:SensorEvent) {

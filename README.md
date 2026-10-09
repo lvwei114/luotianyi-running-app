@@ -1,209 +1,106 @@
-# 洛天依陪跑 · RUN
+# 洛天依陪跑 · Android 原生版
 
-> **安卓原生版 · 绿卫维护的 Fork**
->
-> 原生版作者：绿卫；原项目作者：Cory。本 Fork 保留原项目与提交历史，新增 Kotlin + Jetpack Compose 安卓原生版，源码位于 [`android-native/`](android-native/)。
->
-> [下载 v0.1.3 测试 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.3-native-test) · [原生版功能与构建说明](android-native/README.md) · [最近更新](android-native/docs/v0.1.3改进说明.md)
->
-> 原生版支持独立定时跑、批量歌单导入、GPS 距离记录、平均步频与步幅、记录分析、顶部语音浮窗和自选背景。维护者已反馈真机验证通过。
->
-> 以下为原项目说明。
+洛天依语音、节拍器、音乐和运动记录，陪你迈出每一步。
 
----
+基于 Cory 的 [洛天依陪跑](https://github.com/w8888-hh/luotianyi-running-app) 项目重写的 Android 原生版，使用 **Kotlin + Jetpack Compose** 开发。原生版作者：**绿卫**；原项目作者：**Cory**。
 
+本仓库是原项目的 fork，保留上游代码和提交历史。原生版源码位于 [`android-native/`](android-native/)，独立使用 Room、DataStore 和 Media3。
 
-> 洛天依语音陪跑应用 —— 节拍器 + 心率监测 + 音乐播放 + 语音引导，让跑步不再孤单
+**当前原生测试版：v0.1.6** · Android 8.0 及以上
 
-**当前版本：v1.2**（2026-09-19） · [更新日志](CHANGELOG.md) · [给观众的介绍](B站介绍-v1.2.md)
+[下载安装包](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.6-native-test) · [v0.1.6 更新说明](android-native/docs/v0.1.6改进说明.md) · [原生版构建说明](android-native/README.md) · [原项目](https://github.com/w8888-hh/luotianyi-running-app)
 
-![洛天依陪跑](luotianyi-running-app-icon.png)
+## 安装与开始使用
 
-## 三种跑法
+1. 打开 [v0.1.6 Release](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.6-native-test)，在 Assets 中下载 `.apk` 安装包。另附 SHA256 校验文件。
+2. 安装后按需允许定位、身体活动、蓝牙和通知权限。记录距离需要有效 GPS；心率功能需要支持标准 BLE 心率广播的设备。
+3. 在音乐页批量导入本地歌曲，创建或追加歌单。
+4. 在首页选择跑法，点击“开始跑步”；也可以独立选择 5–60 分钟定时跑。完成后在“记录”页查看分析。
 
-| 跑法 | 谁定节奏 | 说明 |
-|------|----------|------|
-| **跟天依跑** | App | 节拍由慢到快带你跑，跑满歌单总时长自动结束。四个阶段各占多少可以自己调 |
-| **天依跟你跑** | 你的心率 | 按心率自动切换四个区间，节拍器渐进把你带到该区间的标准步频，歌单随心率排序 |
-| **自定义 BPM** | 你 | 自己定一个固定步频（60–220），节拍器全程不变速、不分阶段、不自动结束，跑步中可随时调整 |
+已安装此前同签名原生测试版的用户可覆盖更新；首次安装可能需要允许浏览器或文件管理器安装应用。测试包使用调试签名。
 
-## 功能特性
+## 跑法
 
-### 训练
+| 跑法 | 节奏与时长 |
+|---|---|
+| 跟天依跑 | 按歌单时长分配热身、燃脂、冲刺、放松四阶段，可调整阶段占比 |
+| 天依跟你跑 | 根据有效心率调整训练区间，节拍渐进变化 |
+| 自定义 BPM | 自由设置 60–220 BPM，跑步中可调整 |
+| 独立定时跑 | 选择 5–60 整分钟，暂停不计时，到点结束 |
 
-- **自定义 BPM 模式**：自己定步频，跑步页顶部的胶囊点一下就能改，改完当拍生效
-- **四阶段占比可调**（跟天依跑）：总时长仍等于歌单总长，四个阶段各占多少由你定，改一根滑块其余自动重分
-- **节拍器渐进引导**（天依跟你跑）：每秒最多变 2.5 拍，不再一步跳十几拍；页面会显示 `BPM 165 → 172`，让你知道天依正把你往哪个节奏带
-- **节拍器音色可选**：木块（默认，噪声瞬态 + 共鸣体合成，像打击乐）/ 电子（原方波，刺耳但户外穿透力强）
-- **阶段时间提示**：当前第几阶段、本阶段剩余、距下一阶段还有多久、全程剩余
-- **开跑即出声**：节拍器一响，音乐立刻跟上
-- **结束总结**：时长、距离、平均配速、平均心率，外加一张心率变化曲线
+## 功能
 
-### 音乐
+- **独立跑步界面**：距离与实时配速并排且数字同字号，突出运动时间；可收起界面再返回，支持暂停、继续和结束保存。
+- **GPS 与记录分析**：距离只取 GPS，定位缺失路段不补算；静止时实时配速显示 `--`。平均步频按总步数和有效运动时间计算，步幅使用 GPS 有效路段及对应步数。
+- **记录页**：累计和本周统计、连续跑步天数、单次训练详情、心率曲线、恢复建议，以及带确认的红色删除按钮。
+- **音乐与歌单**：批量导入本地歌曲，新建或追加歌单，BPM 匹配与检测，顺序／随机／心率智能播放，喜欢、移除与恢复，以及保存本次播放歌单。
+- **心率与提醒**：标准 BLE 心率设备连接，最大心率与心率储备设置，心率提醒、补水提醒、随机鼓励语和高温模式。
+- **洛天依语音与节拍器**：本地语音优先、系统 TTS 回退；“天依说”固定在屏幕上方；木块／电子节拍音色，音乐、声音、节拍器和总音量分别调整。
+- **首页与外观**：随本地时间变化的问候语、个人昵称、右侧连续天数与洛天依图标；内置图库、自选背景、头像和完整／简洁／省电效果档位，主题蓝色为 `#66CCFF`。
+- **后台与本地保存**：运动前台服务、锁屏通知与音乐控制、中断训练恢复、保存失败重试；运动记录和个人资料保存在设备本机。
 
-- **本地导入**：mp3 / flac / wav 等，2MB 分块 + 预读流水线 + 并发 2，整批比原来快 58%–78%（40MB 单文件 3.7s → 1.6s）
-- **导入持久化**：重启 App 不用重新导入
-- **移除与恢复**：不需要的歌可以移除（只出歌单，不删本地文件），之后还能加回来
-- **批量导入**：内置专辑里长按进入多选，一次加整张专辑
-- **三种播放模式**：顺序 / 随机 / 智能（按心率排序）
-- **BPM 曲库**：内置 25057 首曲目的 BPM 库，命中就不用检测；未命中才解码分析，测过的会记住，重启不用重算
-- **运动歌单**：跑完可以把这次听过的歌按日期存成歌单，详情页能看曲目、歌手、时长
+## 界面预览
 
-### 安卓专属
+以下为 v0.1.6 原生界面渲染图，训练数字为示例数据。
 
-- **常驻通知条**：锁屏和通知栏都能看到时长、距离、配速、心率、BPM、阶段、当前曲目
-- **通知栏控制**：上一首、播放暂停、下一首、暂停·开始运动、结束运动。图标随状态切换，跟实际播放状态实时同步
-- **原生蓝牙心率**：通过 `@capacitor-community/bluetooth-le` 连接手环 / 心率带
+| 首页 | 跑步 | 记录与分析 |
+|---|---|---|
+| <img src="android-native/docs/images/ui-cleanup/home.png" width="260" alt="时间问候和连续天数"> | <img src="android-native/docs/images/ui-cleanup/workout-moving-small.png" width="260" alt="距离、配速和运动时间"> | <img src="android-native/docs/images/ui-cleanup/run.png" width="260" alt="跑步记录与分析"> |
 
-### 语音与界面
+| 记录详情 | 设置 |
+|---|---|
+| <img src="android-native/docs/images/ui-cleanup/record-detail.png" width="260" alt="心率曲线和删除按钮"> | <img src="android-native/docs/images/ui-cleanup/settings.png" width="260" alt="个人信息、画面效果和心率设备"> |
 
-- **16 句洛天依语音**：阶段提示 + 控制语音 + 8 句随机鼓励语，本地音频优先，缺失才回退系统 TTS
-- **字幕显示**：语音播报时同步显示文字
-- **暗色主题**：深夜跑步不刺眼
-- **心率环 / 心率条**：高性能与低性能两套渲染，按设备自动降级
+更多截图见 [`android-native/docs/images/ui-cleanup/`](android-native/docs/images/ui-cleanup/)。
 
-## 快速开始
+## v0.1.6 更新
 
-### 用安卓 App（推荐）
+- 首页删除“本周记录”，增加时间问候、昵称和右侧连续天数。
+- 底部“跑步”改为“记录”；跑步中的定位、步幅和步频卡片移除，记录页继续保留对应指标。
+- 记录详情删除按钮改为通栏红色按钮，保留删除确认。
+- 设置页删除“数据保存与迁移”模块及两段说明文字。
+- 保留此前 GPS 静止配速修复、同字号距离与配速、原生版作者信息及应用图标。
 
-到 [Releases](../../releases) 下载 APK，安卓 8.0 以上直接装。
+版本为 `0.1.6-native-test`，versionCode 7。编译、39 项 JVM/Robolectric 测试和打包通过；Lint 0 错误、17 条提示，APK v2 签名与此前原生测试版一致。此前版本已获维护者真机验证反馈，**v0.1.6 仍需真机复测**。
 
-当前版本：**v1.2**（113 MB）
+## 开发与构建
 
-```
-https://github.com/w8888-hh/luotianyi-running-app/releases/download/v1.2/luotianyi-running-v1.2.apk
-```
+准备 Android SDK Platform 36 和 JDK 17 或更新版本，使用 Android Studio 打开 `android-native/`；本项目开发验证使用 JDK 21。配置本机 `JAVA_HOME`、`ANDROID_HOME`，或使用不提交到仓库的 `local.properties`。
 
-第一次开跑会要通知权限 —— 给了才有常驻通知条；不给也不影响跑步，只是没有通知条。
+Windows PowerShell：
 
-心率功能需要连蓝牙手环或心率带。不连也能跑，只是「天依跟你跑」会退回按时间推进。
-
-### 在浏览器里跑（功能受限）
-
-```bash
-python -m http.server 8000
-# 或 npx serve .
+```powershell
+cd android-native
+.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
 ```
 
-然后打开 `http://localhost:8000`。
+Linux / macOS：
 
-浏览器版没有原生通知条，蓝牙走 Web Bluetooth（仅 Chrome / Edge，且必须 HTTPS 或 localhost）。
-
-### 自己编译 APK
-
-前置：Node 18+、JDK 17、Android SDK。
-
-```bash
-npx cap sync android
-cd android && ./gradlew assembleDebug
+```sh
+cd android-native
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
 ```
 
-完整的原生工程搭建步骤（Capacitor 初始化、插件注册、权限配置）见 [android/README.md](android/README.md)。版本号在 `android/app/build.gradle` 的 `versionName`。
+安装包输出到 `android-native/app/build/outputs/apk/debug/app-debug.apk`。自行编译的调试签名可能与发布包不同；覆盖安装需使用相同签名。
 
-## 项目结构
+## 仓库目录
 
-```
-running_app/
-├── integrated.html          # 单文件应用（UI + 逻辑，最终部署的就是它）
-├── core/
-│   ├── engine.js            # 核心引擎（纯逻辑，不依赖 DOM）
-│   └── bpm-detective.js     # BPM 检测（开源库）
-├── assets/
-│   ├── bpm_library.json     # 内置 BPM 曲库（25057 首）
-│   └── music_meta.json      # 内置音乐的 BPM / 时长
-├── voices/                  # 洛天依语音（16 句 wav）
-├── android/                 # 自己写的安卓原生代码（通知条插件等）
-├── legacy/                  # 早期的拆分版（index.html + app.js + style.css），仅留档
-├── docs/                    # 引擎 API 文档、语音脚本清单
-├── _validate.js             # 语法 + 关键成员存在性校验
-├── _smoke.js                # 运行时冒烟测试（Node 里真跑引擎）
-├── _bench_import.js         # 导入性能基准
-├── API.md                   # 引擎 API 文档
-├── voice_script.md          # 语音脚本清单
-├── CHANGELOG.md             # 更新日志
-├── B站介绍-v1.2.md          # 面向观众的版本介绍
-└── README.md
-```
+| 路径 | 内容 |
+|---|---|
+| `android-native/` | 本 fork 维护的 Android 原生版源码、测试和文档 |
+| `android-native/docs/` | 版本更新、功能说明和原生界面预览 |
+| `index.html`、`core/`、`legacy/`、`android/` 等 | 保留的上游 Web／Capacitor 项目 |
+| `docs/README-upstream.md` | 原项目 README 存档；上游最新说明以原项目仓库为准 |
 
-## 技术架构
+根目录 `.gitattributes` 将保留的上游代码和生成文件排除出 GitHub 语言统计，原生 Kotlin／Java 源码仍按实际语言统计。安装包通过 Releases 分发，构建缓存、个人数据与签名密钥不提交。
 
-### 核心引擎 `core/engine.js`
+## 作者、来源与许可
 
-纯逻辑层，不依赖 DOM，可在 Node 里直接 `require` 做测试。提供：
+- **原生版作者：绿卫**。
+- **原项目作者：Cory**，哔哩哔哩：本人内心十分开朗。原项目：[w8888-hh/luotianyi-running-app](https://github.com/w8888-hh/luotianyi-running-app)。
+- 代码采用 [MIT License](LICENSE)，分发时保留原有版权和许可声明。
+- GPT-SoVITS 洛天依语音模型作者：只想干饭的麦克斯韦妖；模型项目：[xdedmmc2/GPT-SoVITS-Luo-Tianyi](https://github.com/xdedmmc2/GPT-SoVITS-Luo-Tianyi)。
+- 内置语音、背景和相关资料沿用原项目；应用图标与首页洛天依图标由维护者提供。
+- 洛天依声音与形象版权归上海禾念信息科技有限公司所有；代码许可证不改变图片、声音及其他资源的原有权利归属。
 
-- **Metronome**：Web Audio 前瞻调度（lookahead 25ms / 提前 0.12s 调度），支持 BPM 实时渐变
-- **MusicPlayer**：播放列表、三种模式、BPM 曲库匹配与检测、存档
-- **VoiceEngine**：本地音频优先 + 系统 TTS 回退，串行队列避免重叠
-- **HeartRateMonitor**：Web Bluetooth 心率采集
-- **RunnerEngine**：三种跑法的状态机，事件驱动
-
-### 节拍器音色
-
-不再是单个方波。木块音色由三层合成：
-
-1. 白噪声过带通 → 敲击瞬态（24–38ms）
-2. 三角波，起音频率为基频的 1.5 倍并在 12ms 内滑到基频 → 共鸣体（58–90ms）
-3. 低通（3.8–5.2kHz）削掉刺耳高频
-
-### 事件驱动
-
-```
-UI  ← 订阅事件 ——  核心引擎  ← 调用 API ——  UI
-        (state / stage / bpm / beat / voice / heartrate / tick / runmode)
-```
-
-### 测试
-
-```bash
-node _validate.js   # 语法 + 关键成员存在性 + 回归断言
-node _smoke.js      # Node 里真跑引擎：三种跑法、播放模式、导入、存档
-node _bench_import.js
-```
-
-`_smoke.js` 会真的 `require` 引擎、用真的 `MusicPlayer`（只覆盖必要的部分）跑起来 —— 纯字符串检查抓不到运行时错误，比如曾经漏掉的 `const row = document.createElement('div')`。
-
-## 开源声明
-
-本项目 **100% 开源**，采用 [MIT License](LICENSE)，你可以自由地商用、修改、分发、私有使用。唯一要求是保留版权声明和许可证文本。
-
-### 不在仓库里的内容
-
-| 类别 | 说明 |
-|------|------|
-| 个人跑步记录 | 运动数据、心率历史、跑步轨迹 |
-| 个人账号信息 | 头像、昵称、邮箱、手机号 |
-| 个人音乐库 | 用户自行导入的本地音乐 |
-| APK 安装包 | 体积太大，通过 Releases 分发（`.gitignore` 已排除） |
-| Capacitor 生成的图标 / 闪屏 | 可由 `npx cap add android` 重新生成 |
-
-## 隐私保护
-
-- **本地优先**：所有功能在本机运行，不需要注册账号
-- **数据不上传**：没有服务器，跑步记录只存在你的设备上
-- **无追踪**：无埋点、无统计、无广告、无第三方 SDK
-- **开源可审计**：代码完全公开，隐私相关实现可以直接翻代码核对
-
-## 注意事项
-
-- **安卓 13+**：通知是运行时权限，拒绝后不会有常驻通知条（但不影响跑步）
-- **蓝牙心率**：需要在系统设置里给定位 / 蓝牙权限；部分手环同时只能连一个 App，要先关掉官方 App
-- **iOS**：Safari 不支持相关能力，本项目只面向安卓
-- **音频自动播放**：首次播放需要用户交互（点「开始跑步」即满足）
-
-## 语音替换
-
-仓库里的 `voices/` 是示例语音。想换成自己合成的音色，按 [voice_script.md](voice_script.md) 的命名规范放同名文件进去即可，支持 mp3 / wav / ogg / m4a。
-
-常用生成方式：GPT-SoVITS（社区 LuoTianyi 模型）、ACE Studio、VOCALOID。
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request。改引擎相关逻辑的话，麻烦顺手补一条 `_smoke.js` 的断言 —— 这类纯逻辑改动光靠肉眼看很容易漏。
-
-## 许可证
-
-[MIT License](LICENSE) © 洛天依陪跑社区
-
----
-
-天依陪你跑，每一步都不孤单 —— 开源、免费、无广告、保护隐私
+欢迎通过 [Issues](https://github.com/lvwei114/luotianyi-running-app/issues) 反馈问题，附上应用版本、手机型号、Android 版本及复现步骤。

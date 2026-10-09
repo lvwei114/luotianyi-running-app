@@ -46,7 +46,6 @@ fun dateTime(timestamp:Long):String=Instant.ofEpochMilli(timestamp).atZone(ZoneI
             }
         }}
         item {Text("训练记录",style=MaterialTheme.typography.titleLarge)}
-        item {Text("仅记录 GPS 测得的距离；定位缺失路段不补算。",style=MaterialTheme.typography.bodySmall)}
         if(!state.workoutsLoaded)item {Text("正在加载记录…")}
         else if(state.workouts.isEmpty())item {Text("还没有跑步记录，完成训练后会自动保存。")}
         items(state.workouts,key={it.id}) {w->Card(onClick={vm.detail(w)},modifier=Modifier.fillMaxWidth()) {Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {Text("${RunMode.fromStored(w.mode).label} · ${distance(w.gpsMeters)}",style=MaterialTheme.typography.titleMedium);Text(dateTime(w.startedAt));val m=w.metrics();Text("${duration(w.elapsedMillis)} · 配速 ${pace(m.averagePaceSecondsPerKm)} · ${cadence(m.averageCadence)}",style=MaterialTheme.typography.bodySmall)}}}
@@ -62,14 +61,17 @@ fun dateTime(timestamp:Long):String=Instant.ofEpochMilli(timestamp).atZone(ZoneI
         Metrics(pace(m.averagePaceSecondsPerKm),"平均配速 /km",w.totalSteps.toString(),"总步数")
         Metrics(cadence(m.averageCadence),"平均步频",stride(m.averageStrideMeters),"步幅")
         Metrics(if(hr.isEmpty())"--" else "${hr.map {it.bpm}.average().toInt()} bpm","平均心率",hr.maxOfOrNull {it.bpm}?.let {"$it bpm"} ?: "--","最高心率")
-        Text("距离仅使用 GPS；平均步频按总步数和有效运动时间计算，平均步幅仅使用 GPS 有效路段及对应步数。",style=MaterialTheme.typography.bodySmall)
         Panel("心率变化") {HeartRateChart(hr)}
         Panel("恢复建议") {Text(if(w.elapsedMillis>=45*60_000 || (hr.map {it.bpm}.average().takeIf {it.isFinite()} ?: 0.0)>160)"逐渐降低强度，慢走调整呼吸，及时补水。今天训练强度较高，留出充分恢复时间。" else "慢走调整呼吸，做轻柔拉伸，补充水分。",style=MaterialTheme.typography.bodyMedium)}
         if(!deletable) {
             Text(if(saving)"正在保存记录…" else if(saveError.isNotEmpty())saveError else "已保存至跑步历史",color=if(saveError.isEmpty())LuoBlue else MaterialTheme.colorScheme.error)
             if(saveError.isNotEmpty())Button(onClick=vm::retrySave) {Text("重试保存记录")}
             OutlinedButton(onClick={vm.savePlayed(LocalDate.now().toString())},enabled=!appState.run.playedPlaylistSaved) {Text(if(appState.run.playedPlaylistSaved)"本次歌单已保存" else "保存本次播放歌单")}
-        } else TextButton(onClick={confirmDelete=true}) {Text("删除这条记录",color=MaterialTheme.colorScheme.error)}
+        } else Button(
+            onClick={confirmDelete=true},
+            modifier=Modifier.fillMaxWidth().heightIn(min=48.dp),
+            colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE53935),contentColor=Color.White),
+        ) {Text("删除这条记录")}
     }
     if(confirmDelete)AlertDialog(onDismissRequest={confirmDelete=false},title={Text("删除这条记录？")},text={Text("删除后无法恢复，周统计会同步更新。")},confirmButton={TextButton(onClick={confirmDelete=false;vm.deleteRecord(w.id)}) {Text("确认删除")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("取消")}})
 }

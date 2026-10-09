@@ -1,0 +1,33 @@
+# GitHub Linguist: retained upstream Web / Capacitor implementation.
+# These attributes only affect language statistics and repository presentation.
+/index.html linguist-vendored
+/integrated.html linguist-vendored
+/*.js linguist-vendored
+/android/** linguist-vendored
+/core/** linguist-vendored
+/legacy/** linguist-vendored
+/assets/** linguist-vendored
+/voices/** linguist-vendored
+/_builtin_bpm.json linguist-vendored
+
+# Documentation, media and maintenance tools are not application source.
+/docs/** linguist-detectable=false
+/screenshots/** linguist-detectable=false
+/upload-to-github.ps1 linguist-detectable=false
+/android-native/docs/** linguist-detectable=false
+/android-native/tools/** linguist-detectable=false
+
+# Generated files and bundled build infrastructure in the native project.
+/android-native/**/build/** linguist-generated
+/android-native/.gradle/** linguist-generated
+/android-native/.kotlin/** linguist-generated
+/android-native/gradle/wrapper/** linguist-generated
+/android-native/gradlew linguist-generated
+/android-native/gradlew.bat linguist-generated
+/android-native/app/schemas/** linguist-generated
+/android-native/app/src/main/assets/** linguist-detectable=false
+*.min.js linguist-generated
+*.min.css linguist-generated
+*.map linguist-generated
+
+# Kotlin / Java source and native build scripts retain normal language detection.

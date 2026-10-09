@@ -16,15 +16,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.luotianyi.running.nativeapp.data.*
+import com.luotianyi.running.nativeapp.R
 import com.luotianyi.running.nativeapp.domain.*
 import java.util.Locale
+import java.time.LocalDateTime
+import java.time.ZoneId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 fun duration(ms:Long):String="%02d:%02d".format(ms.coerceAtLeast(0)/60000,ms.coerceAtLeast(0)/1000%60)
@@ -35,11 +46,19 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
 @Composable fun Header(title:String,subtitle:String="") {Column(Modifier.padding(top=22.dp,bottom=4.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {Text(title,style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold);if(subtitle.isNotBlank())Text(subtitle,color=MaterialTheme.colorScheme.onSurfaceVariant)}}
 @Composable fun Panel(title:String,content:@Composable ColumnScope.()->Unit) {Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(22.dp)) {Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {Text(title,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold);content()}}}
 @Composable fun Metrics(first:String,label:String,second:String,other:String) {Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {listOf(first to label,second to other).forEach {(value,title)->Card(Modifier.weight(1f),shape=RoundedCornerShape(18.dp)) {Column(Modifier.fillMaxWidth().padding(16.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {Text(value,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text(title,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)}}}}}
-@Composable fun HomeScreen(state:AppUiState,vm:AppViewModel,start:(RunMode)->Unit,history:()->Unit,returnToRun:()->Unit) {
-    val s=state.settings;val stats=HistoryStats.week(state.workouts,state.today)
+@Composable fun HomeScreen(state:AppUiState,vm:AppViewModel,start:(RunMode)->Unit,returnToRun:()->Unit) {
+    val s=state.settings
+    val lifecycleOwner=LocalLifecycleOwner.current
+    val localNow by produceState(LocalDateTime.now(),lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while(isActive) {value=LocalDateTime.now();delay(30_000)}
+        }
+    }
+    val today=localNow.toLocalDate();val zone=ZoneId.systemDefault()
+    val streak=remember(state.workouts,today,zone) {HistoryStats.week(state.workouts,today,zone).streak}
     var discardRecovery by rememberSaveable {mutableStateOf(false)}
     LazyColumn(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(bottom=20.dp)) {
-        item {Header("洛天依陪跑","${s.nickname}，今天也一起迈出每一步")}
+        item {HomeGreetingHeader(s.nickname,localNow.hour,streak.takeIf {state.workoutsLoaded})}
         if(state.run.training.phase in listOf(RunPhase.PREPARING,RunPhase.RUNNING,RunPhase.PAUSED))item {ActiveWorkoutCard(state,returnToRun)}
         if(state.run.recoveryError.isNotEmpty())item {Panel("恢复上次记录") {Text(state.run.recoveryError);Button(onClick=vm::retryRecovery,enabled=!state.recovering) {Text("重试恢复")};TextButton(onClick={discardRecovery=true},enabled=!state.recovering) {Text("放弃上次记录")}}}
         item {Panel("今天怎么跑？") {
@@ -61,15 +80,28 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
             Text("暂停不计时，到点结束。",style=MaterialTheme.typography.bodySmall)
             Button(onClick={start(RunMode.TIMED)},enabled=!state.busy && !state.recovering && state.run.saveError.isEmpty() && state.run.recoveryError.isEmpty(),modifier=Modifier.fillMaxWidth()) {Text("开始定时跑")}
         }}
-        item {Panel("本周记录 · 连续 ${stats.streak} 天") {
-            Text("${distance(stats.meters)} · ${stats.runs} 次 · ${duration(stats.elapsedMs)}",color=LuoBlue)
-            Row(Modifier.fillMaxWidth().height(82.dp),horizontalArrangement=Arrangement.SpaceEvenly,verticalAlignment=Alignment.Bottom) {stats.daily.forEachIndexed {i,value->Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {val fraction=if(stats.daily.maxOrNull()==0L)0f else value.toFloat()/stats.daily.maxOrNull()!!;Box(Modifier.width(20.dp).height((4+fraction*50).dp).background(if(value>0)LuoBlue else AppSurface, RoundedCornerShape(4.dp)));Text(listOf("一","二","三","四","五","六","日")[i],style=MaterialTheme.typography.labelSmall)}}}
-            Text("平均配速 ${pace(stats.pace)}\n平均步频 ${cadence(stats.cadence)} · 步幅 ${stride(stats.stride)}",style=MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick=history,modifier=Modifier.fillMaxWidth()) {Text("跑步历史")}
-        }}
         if(s.withWearable)item {Panel("心率") {Text("${state.hr.bpm ?: "--"} bpm",style=MaterialTheme.typography.headlineMedium,color=LuoBlue);Text(state.hr.label);Text("支持标准蓝牙心率广播，在设置页连接设备。",style=MaterialTheme.typography.bodySmall)}}
     }
     if(discardRecovery)AlertDialog(onDismissRequest={discardRecovery=false},title={Text("放弃上次未恢复的记录？")},text={Text("这会清除上次中断训练的检查点，已保存的历史不受影响。清除后无法恢复这条记录。")},confirmButton={TextButton(onClick={discardRecovery=false;vm.discardRecovery()}) {Text("确认放弃")}},dismissButton={TextButton(onClick={discardRecovery=false}) {Text("取消")}})
+}
+@Composable private fun HomeGreetingHeader(nickname:String,hour:Int,streak:Int?) {
+    val greeting=when(hour) {
+        in 5..10->"早上好"
+        in 11..13->"中午好"
+        in 14..17->"下午好"
+        in 18..22->"晚上好"
+        else->"夜深了"
+    }
+    Column(Modifier.fillMaxWidth().padding(top=22.dp,bottom=4.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+            Text("$greeting，$nickname",modifier=Modifier.weight(1f),style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,maxLines=2,overflow=TextOverflow.Ellipsis)
+            Row(horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
+                Image(painterResource(R.drawable.home_streak_tianyi),contentDescription=null,modifier=Modifier.size(28.dp),contentScale=ContentScale.Fit)
+                Text("连续 ${streak ?: "--"} 天",color=LuoBlue,style=MaterialTheme.typography.labelLarge,maxLines=1)
+            }
+        }
+        Text("今天也一起迈出每一步",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 @Composable fun StageRatios(s:AppSettings,vm:AppViewModel) {
     var open by rememberSaveable {mutableStateOf(false)}
@@ -94,21 +126,16 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
 @Composable fun RunScreen(state:AppUiState,vm:AppViewModel,start:(RunMode)->Unit,minimize:()->Unit) {
     val run=state.run;val t=run.training;val s=state.settings
     var confirmEnd by rememberSaveable {mutableStateOf(false)}
-    val metrics=WorkoutMetrics.measured(t.elapsedMs,run.steps,GpsRecordChannel(run.gpsMeters,run.gpsStepMeters,run.gpsSteps))
     LazyColumn(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(bottom=20.dp)) {
         item {Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
             TextButton(onClick=minimize) {Text("收起跑步界面")}
             Text("洛天依陪跑",color=LuoBlue,style=MaterialTheme.typography.labelLarge)
         }}
-        item {Spacer(Modifier.height(48.dp))}
-        item {Header(t.mode.label,when(t.phase) {RunPhase.PREPARING->"正在预热 GPS";RunPhase.RUNNING->"${t.stageName} · ${t.bpm} BPM";RunPhase.PAUSED->"已暂停";RunPhase.FINISHED->"训练完成";else->"准备好就出发"})}
         if(t.phase==RunPhase.PREPARING)item {Panel("GPS 预热") {Text("${run.accuracy?.roundToInt()?.let {"约 $it 米"} ?: "等待信号"}，最多等待 20 秒；预热不计入运动时间。");Button(onClick={vm.runCommand("SKIP")}) {Text("跳过等待，开始训练")};TextButton(onClick={vm.runCommand("FINISH")}) {Text("取消")}}}
-        item {RunHero(run.gpsMeters,t.elapsedMs)}
+        item {RunHero(run.gpsMeters,t.elapsedMs,run.pace.takeIf {t.phase==RunPhase.RUNNING && run.gpsFresh})}
         if(t.totalMs>0)item {Panel(if(t.mode==RunMode.TIMED)"定时目标 ${t.totalMs/60000} 分钟" else "歌单训练进度") {Text("剩余 ${duration((t.totalMs-t.elapsedMs).coerceAtLeast(0))}",color=RunOrange,style=MaterialTheme.typography.headlineSmall);LinearProgressIndicator(progress={(t.elapsedMs.toFloat()/t.totalMs).coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth());Text("本阶段剩余 ${duration(t.stageRemainingMs)}",style=MaterialTheme.typography.bodySmall)}}
         if(s.withWearable)item {HeartRateView(run.heartRate,s,t.phase==RunPhase.RUNNING)}
-        item {Metrics(pace(run.pace ?: metrics.averagePaceSecondsPerKm),"配速 /km",t.bpm.toString(),if(t.bpm!=t.targetBpm)"BPM → ${t.targetBpm}" else "节拍 BPM")}
-        item {Metrics(run.steps.toString(),"总步数",cadence(metrics.averageCadence),"平均步频")}
-        item {Panel("定位与步幅") {Text(if(run.gpsFresh)"GPS 良好 · 约 ${run.accuracy?.roundToInt()} 米" else "等待有效 GPS 信号");Text("步幅 ${stride(metrics.averageStrideMeters)}");Text("记录距离只使用 GPS。${if(run.liveEstimatedMeters>0)"缺失路段步幅估算 ${distance(run.liveEstimatedMeters)}，仅供参考，不记入记录。" else "定位缺失路段不补算。"}",style=MaterialTheme.typography.bodySmall);if(run.status.isNotEmpty())Text(run.status,color=RunOrange)}}
+        item {Panel("节拍 BPM") {Text(t.bpm.toString(),style=MaterialTheme.typography.headlineMedium,color=LuoBlue);if(t.bpm!=t.targetBpm)Text("目标 ${t.targetBpm} BPM",style=MaterialTheme.typography.bodySmall)}}
         if(t.mode==RunMode.CUSTOM)item {Panel("调整固定步频") {IntegerSlider("BPM",s.customBpm,60..220) {value->vm.settings {it.copy(customBpm=value)}}}}
         item {MiniPlayer(state,vm)}
         item {Panel("运动控制") {when(t.phase) {
@@ -121,16 +148,37 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
     }
     if(confirmEnd)AlertDialog(onDismissRequest={confirmEnd=false},title={Text("结束本次训练？")},text={Text("将保存距离、步频、步幅和心率记录。")},confirmButton={TextButton(onClick={confirmEnd=false;vm.runCommand("FINISH")}) {Text("结束并保存")}},dismissButton={TextButton(onClick={confirmEnd=false}) {Text("继续训练")}})
 }
-@Composable private fun RunHero(meters:Double,elapsedMs:Long) {
+@Composable private fun RunHero(meters:Double,elapsedMs:Long,livePace:Double?) {
     Surface(Modifier.fillMaxWidth().testTag("run-hero"),shape=RoundedCornerShape(26.dp),color=AppSurface) {
-        Column(Modifier.background(Brush.verticalGradient(listOf(LuoBlue.copy(alpha=.16f),Color.Transparent))).padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Text("距离",color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(String.format(Locale.ROOT,"%.2f",meters/1000),fontSize=56.sp,fontWeight=FontWeight.Bold,color=LuoBlue,maxLines=1)
-            Text("km",color=LuoBlue)
+        Column(Modifier.background(Brush.verticalGradient(listOf(LuoBlue.copy(alpha=.16f),Color.Transparent))).padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val distanceValue=String.format(Locale.ROOT,"%.2f",meters/1000)
+                val paceValue=pace(livePace)
+                val fontScale=androidx.compose.ui.platform.LocalDensity.current.fontScale
+                // Fit both values together so distance and pace always use the same font size.
+                val sharedSize=minOf(48f,(maxWidth.value-12f)/2/(maxOf(distanceValue.length,paceValue.length)*.64f*fontScale)).coerceAtLeast(16f)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).testTag("run-distance"),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Text("距离",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        HeroValue(distanceValue,sharedSize)
+                        Text("km",color=LuoBlue)
+                    }
+                    Column(Modifier.weight(1f).testTag("run-live-pace"),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Text("实时配速",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        HeroValue(paceValue,sharedSize)
+                        Text("/km",color=LuoBlue)
+                    }
+                }
+            }
             HorizontalDivider(Modifier.padding(vertical=10.dp),color=LuoBlue.copy(alpha=.2f))
             Text("运动时间",color=MaterialTheme.colorScheme.onSurfaceVariant)
             Text(duration(elapsedMs),fontSize=42.sp,fontWeight=FontWeight.Bold,maxLines=1)
         }
+    }
+}
+@Composable private fun HeroValue(value:String,size:Float) {
+    Box(Modifier.fillMaxWidth().height(64.dp),contentAlignment=Alignment.Center) {
+        Text(value,fontSize=size.sp,fontWeight=FontWeight.Bold,color=LuoBlue,maxLines=1)
     }
 }
 @Composable fun HeartRateView(hr:Int?,s:AppSettings,running:Boolean) {

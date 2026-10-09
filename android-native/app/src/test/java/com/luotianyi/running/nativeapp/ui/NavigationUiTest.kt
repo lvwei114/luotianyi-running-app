@@ -6,6 +6,8 @@ import android.graphics.Canvas
 import com.luotianyi.running.nativeapp.MainActivity
 import com.luotianyi.running.nativeapp.RunningApplication
 import com.luotianyi.running.nativeapp.domain.*
+import com.luotianyi.running.nativeapp.data.WorkoutEntity
+import com.luotianyi.running.nativeapp.data.HeartRateSampleEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.filter
@@ -31,6 +33,23 @@ class NavigationUiTest {
         compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();compose.onAllNodesWithTag("run-hero").fetchSemanticsNodes().isNotEmpty()}
         compose.onNodeWithTag("run-hero").assertIsDisplayed()
         compose.onNodeWithText("距离").assertIsDisplayed();compose.onNodeWithText("运动时间").assertIsDisplayed()
+        compose.onNodeWithText("实时配速").assertIsDisplayed()
+        // There is historical distance and time, but no live motion: never display average pace.
+        compose.onNodeWithTag("run-live-pace").onChildren().filter(hasText("--")).assertCountEquals(1)
+        val distanceBounds=compose.onNodeWithTag("run-distance").fetchSemanticsNode().boundsInRoot
+        val paceBounds=compose.onNodeWithTag("run-live-pace").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(paceBounds.left>=distanceBounds.right)
+        org.junit.Assert.assertEquals(distanceBounds.top,paceBounds.top,1f)
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(pace=400.0,gpsFresh=true)}
+        compose.onNodeWithTag("run-live-pace").onChildren().filter(hasText("6'40\"")).assertCountEquals(1)
+        capture("workout-moving-small")
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("运动控制"))
+        capture("workout-controls-small")
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasTestTag("run-hero"))
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(gpsFresh=false)}
+        compose.onNodeWithTag("run-live-pace").onChildren().filter(hasText("--")).assertCountEquals(1)
+        compose.runOnUiThread {app.runState.value=app.runState.value.copy(pace=null)}
+        compose.onNodeWithTag("run-live-pace").onChildren().filter(hasText("--")).assertCountEquals(1)
         compose.onNode(hasText("首页") and hasClickAction()).assertDoesNotExist()
         capture("workout-small")
         compose.runOnUiThread {app.voice.speak("jiayou","加油哦，天依相信你！")}
@@ -43,7 +62,7 @@ class NavigationUiTest {
         compose.runOnUiThread {app.runState.value=app.runState.value.copy(training=app.runState.value.training.copy(phase=RunPhase.PAUSED))}
         compose.onNodeWithText("返回跑步界面").assertIsDisplayed()
         compose.onNodeWithTag("run-hero").assertDoesNotExist()
-        compose.onNode(hasText("跑步") and hasClickAction()).performClick()
+        compose.onNode(hasText("记录") and hasClickAction()).performClick()
         compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
         compose.onNodeWithText("返回跑步界面").performClick()
         compose.onNodeWithTag("run-hero").assertIsDisplayed()
@@ -75,13 +94,33 @@ class NavigationUiTest {
     }
     @Test fun allFourNativePagesKeepNavigationAndRender() {
         dismissIntroduction()
+        val app=compose.activity.application as RunningApplication
+        val ended=System.currentTimeMillis()
+        val sample=WorkoutEntity("ui-preview",ended-1_200_000,ended,RunMode.TIMED.name,20,1_200_000,3000.0,3200,3000.0,3200)
+        runBlocking {app.workoutRepository.save(sample,listOf(HeartRateSampleEntity(sample.id,0,110),HeartRateSampleEntity(sample.id,600000,142),HeartRateSampleEntity(sample.id,1200000,130)))}
         capture("home")
-        for(tab in listOf("音乐","跑步","设置","首页")) {
+        for(tab in listOf("音乐","记录","设置","首页")) {
             compose.onNode(hasText(tab) and hasClickAction()).performClick()
             compose.waitForIdle()
-            for(label in listOf("首页","跑步","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
-            capture(when(tab) {"音乐"->"music";"跑步"->"run";"设置"->"settings";else->"home"})
-            if(tab=="跑步")compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
+            for(label in listOf("首页","记录","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
+            capture(when(tab) {"音乐"->"music";"记录"->"run";"设置"->"settings";else->"home"})
+            if(tab=="记录") {
+                compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
+                compose.onNodeWithText("${RunMode.TIMED.label} · 3.00 km").performScrollTo().performClick()
+                compose.onNodeWithText("平均步频").assertIsDisplayed()
+                capture("record-detail-top",dialog=true)
+                compose.onNodeWithText("删除这条记录").performScrollTo()
+                capture("record-detail",dialog=true)
+                compose.onNodeWithText("关闭").performClick()
+            }
+            if(tab=="设置") {
+                compose.onNode(hasScrollToNodeAction()).performScrollToIndex(5)
+                capture("settings-reminders")
+                compose.onNode(hasScrollToNodeAction()).performScrollToIndex(6)
+                capture("settings-audio")
+                compose.onNode(hasScrollToNodeAction()).performScrollToIndex(7)
+                capture("settings-about")
+            }
         }
     }
     @Test @Config(qualifiers="w360dp-h640dp-mdpi")
@@ -96,10 +135,10 @@ class NavigationUiTest {
         compose.onNode(hasText("天依跟你跑") and hasClickAction()).assertIsEnabled()
         compose.onNode(hasText("自定义 BPM") and hasClickAction()).assertIsEnabled()
         capture("home-small")
-        for(tab in listOf("音乐","跑步","设置")) {
+        for(tab in listOf("音乐","记录","设置")) {
             compose.onNode(hasText(tab) and hasClickAction()).performClick();compose.waitForIdle()
-            for(label in listOf("首页","跑步","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
-            capture(when(tab) {"音乐"->"music-small";"跑步"->"run-small";else->"settings-small"})
+            for(label in listOf("首页","记录","音乐","设置"))compose.onNode(hasText(label) and hasClickAction()).assertIsDisplayed()
+            capture(when(tab) {"音乐"->"music-small";"记录"->"run-small";else->"settings-small"})
         }
     }
     private fun dismissIntroduction() {
@@ -110,12 +149,12 @@ class NavigationUiTest {
         compose.waitUntil(15000) {compose.onAllNodesWithText("我已了解").fetchSemanticsNodes().isEmpty()}
         compose.waitForIdle()
     }
-    private fun capture(name:String) {
+    private fun capture(name:String,dialog:Boolean=false) {
         val file=File("build/qa/native-$name.png");file.parentFile?.mkdirs()
         file.outputStream().use {output ->
             // Robolectric has no compositor for PixelCopy; draw the actual native view tree.
             compose.runOnUiThread {
-                val view=compose.activity.window.decorView
+                val view=if(dialog)android.view.inspector.WindowInspector.getGlobalWindowViews().last {it.width>0 && it!==compose.activity.window.decorView} else compose.activity.window.decorView
                 val bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
                 view.draw(Canvas(bitmap))
                 bitmap.compress(Bitmap.CompressFormat.PNG,100,output)

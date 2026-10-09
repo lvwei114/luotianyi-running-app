@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 import android.graphics.BitmapFactory
 import java.io.File
 
-enum class AppTab(val label:String) { HOME("首页"),RUN("跑步"),MUSIC("音乐"),SETTINGS("设置") }
+enum class AppTab(val label:String) { HOME("首页"),RUN("记录"),MUSIC("音乐"),SETTINGS("设置") }
 @Composable fun localPicture(path:String):ImageBitmap? {
     val context=LocalContext.current
     val bitmap by produceState<ImageBitmap?>(null,path) {value=withContext(Dispatchers.IO) {
@@ -91,14 +91,19 @@ enum class AppTab(val label:String) { HOME("首页"),RUN("跑步"),MUSIC("音乐
                 val ms=if(state.settings.displayTier==com.luotianyi.running.nativeapp.data.DisplayTier.LOW)0 else 220
                 fadeIn(tween(ms)) togetherWith fadeOut(tween(ms))
             },label="page") {target->holder.SaveableStateProvider(target) {
-                if(target=="WORKOUT")RunScreen(state,vm,::start,{workout=false}) else when(AppTab.valueOf(target)) {
-                    AppTab.HOME->HomeScreen(state,vm,::start,{tabName=AppTab.RUN.name},{workout=true})
+                if(target=="WORKOUT")Column(Modifier.fillMaxSize()) {
+                    if(state.subtitle.isNotBlank())Box(Modifier.fillMaxWidth().padding(vertical=8.dp),contentAlignment=Alignment.TopCenter) {
+                        TianyiToast(state.subtitle,state.settings.displayTier)
+                    }
+                    Box(Modifier.weight(1f)) {RunScreen(state,vm,::start,{workout=false})}
+                } else when(AppTab.valueOf(target)) {
+                    AppTab.HOME->HomeScreen(state,vm,::start,{workout=true})
                     AppTab.RUN->HistoryScreen(state,vm,{workout=true})
                     AppTab.MUSIC->MusicScreen(state,vm)
                     AppTab.SETTINGS->SettingsScreen(state,vm,::scan,{context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))})
                 }
             }}
-            TianyiToast(state.subtitle,state.settings.displayTier,Modifier.align(Alignment.TopCenter).padding(top=64.dp))
+            if(!workout)TianyiToast(state.subtitle,state.settings.displayTier,Modifier.align(Alignment.TopCenter).padding(top=64.dp))
         }}
     }
     state.detail?.let {WorkoutDetailDialog(it,vm,{vm.closeDetail()},true)}
