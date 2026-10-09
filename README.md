@@ -6,13 +6,13 @@
 
 本仓库是原项目的 fork，保留上游代码和提交历史。原生版源码位于 [`android-native/`](android-native/)，独立使用 Room、DataStore 和 Media3。
 
-**当前原生测试版：v0.1.6** · Android 8.0 及以上
+**当前原生测试版：v0.1.7** · Android 8.0 及以上
 
-[下载安装包](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.6-native-test) · [v0.1.6 更新说明](android-native/docs/v0.1.6改进说明.md) · [原生版构建说明](android-native/README.md) · [原项目](https://github.com/w8888-hh/luotianyi-running-app)
+[下载安装包](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.7-native-test) · [v0.1.7 更新说明](android-native/docs/v0.1.7改进说明.md) · [原生版构建说明](android-native/README.md) · [原项目](https://github.com/w8888-hh/luotianyi-running-app)
 
 ## 安装与开始使用
 
-1. 打开 [v0.1.6 Release](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.6-native-test)，在 Assets 中下载 `.apk` 安装包。另附 SHA256 校验文件。
+1. 打开 [v0.1.7 Release](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.7-native-test)，在 Assets 中下载 `.apk` 安装包。另附 SHA256 校验文件。
 2. 安装后按需允许定位、身体活动、蓝牙和通知权限。记录距离需要有效 GPS；心率功能需要支持标准 BLE 心率广播的设备。
 3. 在音乐页批量导入本地歌曲，创建或追加歌单。
 4. 在首页选择跑法，点击“开始跑步”；也可以独立选择 5–60 分钟定时跑。完成后在“记录”页查看分析。
@@ -26,7 +26,7 @@
 | 跟天依跑 | 按歌单时长分配热身、燃脂、冲刺、放松四阶段，可调整阶段占比 |
 | 天依跟你跑 | 根据有效心率调整训练区间，节拍渐进变化 |
 | 自定义 BPM | 自由设置 60–220 BPM，跑步中可调整 |
-| 独立定时跑 | 选择 5–60 整分钟，暂停不计时，到点结束 |
+| 定时跑 | 选择 5–60 整分钟，暂停不计时，到点结束 |
 
 ## 功能
 
@@ -53,7 +53,11 @@
 
 更多截图见 [`android-native/docs/images/ui-cleanup/`](android-native/docs/images/ui-cleanup/)。
 
-## v0.1.6 更新
+## v0.1.7 更新
+
+首页和文档中的相关名称统一为“定时跑”。版本为 `0.1.7-native-test`，versionCode 8；定时范围、跑法和计时逻辑保持原有行为。编译、打包及名称、版本、v2 签名校验通过，签名与此前原生测试版一致。本次仅文案和版本号调整，未重复运行 v0.1.6 的测试；v0.1.7 尚需真机复测。
+
+### v0.1.6 更新
 
 - 首页删除“本周记录”，增加时间问候、昵称和右侧连续天数。
 - 底部“跑步”改为“记录”；跑步中的定位、步幅和步频卡片移除，记录页继续保留对应指标。

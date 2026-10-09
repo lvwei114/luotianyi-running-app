@@ -4,9 +4,11 @@
 
 使用 Kotlin、Jetpack Compose、Room、DataStore 和 Media3。源码位于 fork 的 `android-native/`，支持 Android 8.0（API 26）及以上。
 
-**当前测试版：v0.1.6** · `0.1.6-native-test` · versionCode 7
+**当前测试版：v0.1.7** · `0.1.7-native-test` · versionCode 8
 
-[下载测试 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.6-native-test) · [更新说明](docs/v0.1.6改进说明.md) · [功能清单](docs/功能迁移清单.md) · [fork 首页](https://github.com/lvwei114/luotianyi-running-app)
+v0.1.7 将相关名称统一为“定时跑”，定时范围、跑法和计时逻辑保持原有行为。
+
+[下载测试 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.7-native-test) · [更新说明](docs/v0.1.7改进说明.md) · [功能清单](docs/功能迁移清单.md) · [fork 首页](https://github.com/lvwei114/luotianyi-running-app)
 
 ## 功能
 
@@ -29,7 +31,7 @@
 
 ![设置页](docs/images/ui-cleanup/settings-overview.png)
 
-上述为 Compose 原生界面渲染，训练数值为示例数据。[界面调整说明](docs/界面精简改进说明.md) · [首页问候语说明](docs/首页问候语改进说明.md)。
+上述为 v0.1.6 的 Compose 原生界面渲染，训练数值为示例数据；v0.1.7 将定时跑名称和版本号更新。[界面调整说明](docs/界面精简改进说明.md) · [首页问候语说明](docs/首页问候语改进说明.md)。
 
 ## 构建
 
@@ -53,7 +55,7 @@
 
 v0.1.6 的编译、39 项 JVM/Robolectric 测试、Lint 和打包通过，Lint 0 错误、17 条提示；检查了 390×844 和 360×640 界面渲染。APK 应用名为“洛天依陪跑”，使用与此前原生测试版一致的调试签名，可覆盖更新同签名版本。自行编译使用的签名可能不同。
 
-此前版本获得维护者真机验证反馈，v0.1.6 尚需真机复测。定位、身体活动、蓝牙和通知权限用于对应运动功能，心率设备需支持标准 BLE 心率广播。
+v0.1.7 的编译、打包、名称、版本和签名校验通过；本次仅文案和版本号调整，未重复运行 v0.1.6 的测试。此前版本获得维护者真机验证反馈，v0.1.7 尚需真机复测。定位、身体活动、蓝牙和通知权限用于对应运动功能，心率设备需支持标准 BLE 心率广播。
 
 [历史 bug 修复说明](docs/bugs修复说明.md)。
 

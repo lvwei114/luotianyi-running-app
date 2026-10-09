@@ -67,7 +67,7 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
             if(s.legacyMode==RunMode.GUIDE)StageRatios(s,vm)
             Button(onClick={start(s.legacyMode)},enabled=!state.busy && !state.recovering && state.settingsLoaded && state.run.saveError.isEmpty() && state.run.recoveryError.isEmpty(),modifier=Modifier.fillMaxWidth()) {Text(if(state.busy)"本次训练正在进行" else "开始跑步")}
         }}
-        item {Panel("独立定时跑") {
+        item {Panel("定时跑") {
             var value by remember(s.timedMinutes) {mutableFloatStateOf(s.timedMinutes.toFloat())}
             Text("${value.roundToInt()} 分钟",color=RunOrange,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
             Slider(value=value,onValueChange={value=it.roundToInt().toFloat()},onValueChangeFinished={vm.setTimedMinutes(value.roundToInt())},valueRange=5f..60f,steps=54,enabled=!state.busy && state.settingsLoaded)
