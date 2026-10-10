@@ -9,16 +9,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import com.luotianyi.running.nativeapp.data.*
+import com.luotianyi.running.nativeapp.domain.VoiceCatalog
+import com.luotianyi.running.nativeapp.domain.VoiceCategory
 import kotlin.math.roundToInt
 
 @Composable fun SettingsScreen(state:AppUiState,vm:AppViewModel,scan:()->Unit,bluetoothSettings:()->Unit) {
-    val s=state.settings;var profile by rememberSaveable {mutableStateOf(false)};var backgroundDialog by rememberSaveable {mutableStateOf(false)}
+    val s=state.settings;var profile by rememberSaveable {mutableStateOf(false)};var backgroundDialog by rememberSaveable {mutableStateOf(false)};var voiceDialog by rememberSaveable {mutableStateOf(false)}
     val avatarPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(uri!=null)vm.avatar(uri)}
     val imagePicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {uris->vm.addBackgrounds(uris)}
     LazyColumn(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(bottom=20.dp)) {
@@ -49,11 +52,13 @@ import kotlin.math.roundToInt
             Text("90% 及以上提示放慢；持续 15 秒达到 100% 时暂停，需手动恢复。只使用最近 10 秒的有效心率，提醒不代替医疗判断。",style=MaterialTheme.typography.bodySmall)
         }}
         item {Panel("运动提醒") {
-            Text("随机鼓励语频率")
+            Text("随机鼓励与聊天频率")
             ChoiceRow(listOf("off" to "关闭","sparse" to "稀疏","standard" to "标准","dense" to "密集"),s.chatFrequency) {value->vm.settings {it.copy(chatFrequency=value)}}
+            Text("稀疏约 90–140 秒，标准约 35–55 秒，密集约 18–30 秒；提醒后会稍作间隔。关闭后仍保留阶段提示及已启用的运动提醒。",style=MaterialTheme.typography.bodySmall)
             Text("补水提醒")
             ChoiceRow(listOf("0" to "关闭","15" to "15分","20" to "20分","30" to "30分"),s.hydrationMinutes.toString()) {value->vm.settings {it.copy(hydrationMinutes=value.toInt())}}
             ToggleRow("高温模式：补水间隔缩短 25%",s.highTemp) {v->vm.settings {it.copy(highTemp=v)}}
+            OutlinedButton(onClick={voiceDialog=true},modifier=Modifier.fillMaxWidth()) {Text("天依语音（${VoiceCatalog.all.size} 条）")}
         }}
         item {Panel("音量与节拍器") {
             VolumeSlider("总音量",s.masterVolume) {v->vm.settings {it.copy(masterVolume=v)}}
@@ -74,6 +79,22 @@ import kotlin.math.roundToInt
         }}
     }
     if(profile)ProfileDialog(s,vm,{profile=false})
+    if(voiceDialog)FullDialog("天依语音",{voiceDialog=false;vm.stopVoicePreview()},overlay={
+        TianyiToast(state.subtitle,state.settings.displayTier,Modifier.align(Alignment.TopCenter).padding(top=64.dp))
+    }) {
+        Text(if(state.busy)"训练中暂不可试听，结束后可以查看字幕并试听全部语音。" else "选择一条语音试听，字幕会随声音显示。")
+        VoiceCategory.entries.forEach {category->
+            val lines=VoiceCatalog.inCategory(category)
+            Panel("${category.label} · ${lines.size} 条") {
+                lines.forEach {line->
+                    Text(line.text,style=MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick={if(state.speakingVoiceId==line.id)vm.stopVoicePreview() else vm.previewVoice(line)},enabled=!state.busy) {
+                        Text(if(state.speakingVoiceId==line.id)"停止" else "试听")
+                    }
+                }
+            }
+        }
+    }
     if(backgroundDialog)FullDialog("背景图库",{backgroundDialog=false}) {
         state.backgrounds.chunked(2).forEach {row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {row.forEach {entry->Card(onClick={vm.settings {it.copy(background=entry.id)}},modifier=Modifier.weight(1f)) {Column(Modifier.padding(8.dp)) {val image=localPicture(entry.path);if(image!=null)Image(image,null,Modifier.fillMaxWidth().height(120.dp),contentScale=ContentScale.Crop) else Box(Modifier.fillMaxWidth().height(120.dp));Text((if(s.background==entry.id)"✓ " else "")+entry.name)}}}}}
         Button(onClick={imagePicker.launch(arrayOf("image/*"))}) {Text("添加自选图片（可多选）")}

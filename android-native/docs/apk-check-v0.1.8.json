@@ -1,0 +1,16 @@
+{
+  "package": "com.luotianyi.running.nativeapp",
+  "versionCode": 9,
+  "versionName": "0.1.8-native-test",
+  "label": "洛天依陪跑",
+  "minSdk": 26,
+  "targetSdk": 36,
+  "voiceAssets": 59,
+  "voiceBytesMatchSource": true,
+  "zipIntegrity": "passed",
+  "matchesBuildOutput": true,
+  "bytes": 43811162,
+  "sha256": "A4FEDDB4C9536A6AA0B135F11A5D249796A07B45185CCC0EDBF0062354DC8AB7",
+  "certificateSha256": "af88cc912a07f322192e1559161b88a887d1fc2689079c89ff7675918876ab11",
+  "sameSignerAsV017": true
+}

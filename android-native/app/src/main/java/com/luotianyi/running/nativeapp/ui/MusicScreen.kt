@@ -117,12 +117,15 @@ import com.luotianyi.running.nativeapp.data.*
     }
     if(confirmDelete)AlertDialog(onDismissRequest={confirmDelete=false},title={Text("删除这个歌单？")},text={Text("音乐文件会保留。")},confirmButton={TextButton(onClick={confirmDelete=false;vm.deletePlaylist(detail.playlist.id)}) {Text("确认删除")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("取消")}})
 }
-@Composable fun FullDialog(title:String,close:()->Unit,canClose:Boolean=true,content:@Composable ColumnScope.()->Unit) {
+@Composable fun FullDialog(title:String,close:()->Unit,canClose:Boolean=true,overlay:@Composable BoxScope.()->Unit={DialogVoiceCaption()},content:@Composable ColumnScope.()->Unit) {
     Dialog(onDismissRequest={if(canClose)close()},properties=DialogProperties(usePlatformDefaultWidth=false)) {
         Surface(Modifier.fillMaxSize(),color=AppBackground) {
-            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+              Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween) {Text(title,style=MaterialTheme.typography.titleLarge,modifier=Modifier.weight(1f));TextButton(onClick=close,enabled=canClose) {Text("关闭")}}
                 androidx.compose.foundation.rememberScrollState().let {scroll->Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal=18.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp),content=content)}
+              }
+              overlay()
             }
         }
     }

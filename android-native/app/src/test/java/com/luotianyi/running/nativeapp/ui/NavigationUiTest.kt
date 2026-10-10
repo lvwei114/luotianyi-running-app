@@ -149,6 +149,38 @@ class NavigationUiTest {
         compose.waitUntil(15000) {compose.onAllNodesWithText("我已了解").fetchSemanticsNodes().isEmpty()}
         compose.waitForIdle()
     }
+    @Test fun voiceLibraryDisablesAuditionDuringTrainingAndCaptionsRemainVisibleInDialogs() {
+        dismissIntroduction()
+        val app=compose.activity.application as RunningApplication
+        org.robolectric.shadows.ShadowMediaPlayer.setMediaInfoProvider {org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(5000,0)}
+        try {
+            compose.runOnUiThread {app.runState.value=app.runState.value.copy(sessionId="voice-library-session",training=TrainingState(phase=RunPhase.RUNNING,mode=RunMode.CUSTOM))}
+            compose.waitUntil(15000) {compose.onAllNodesWithText("收起跑步界面").fetchSemanticsNodes().isNotEmpty()}
+            compose.onNodeWithText("收起跑步界面").performClick()
+            compose.onNode(hasText("设置") and hasClickAction()).performClick()
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("天依语音（59 条）"))
+            compose.onNodeWithText("随机鼓励与聊天频率").assertExists()
+            compose.onNodeWithText("天依语音（59 条）").performClick()
+            compose.onAllNodesWithText("试听").assertCountEquals(59)
+            compose.onAllNodesWithText("试听")[0].assertIsNotEnabled()
+            compose.runOnUiThread {app.runState.value=app.runState.value.copy(training=TrainingState(phase=RunPhase.FINISHED))}
+            compose.onAllNodesWithText("试听")[0].assertIsEnabled().performClick()
+            val caption="天依："+VoiceCatalog.get("zhunbei").text
+            compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();app.voice.playingId.value=="zhunbei"}
+            compose.onNode(hasText(caption) and hasAnyAncestor(isDialog())).assertIsDisplayed()
+            capture("voice-library",dialog=true)
+            compose.onNode(hasText("关闭") and hasAnyAncestor(isDialog())).performClick()
+            org.junit.Assert.assertFalse(app.voice.isBusy)
+            val ended=System.currentTimeMillis()
+            compose.runOnUiThread {
+                app.runState.value=app.runState.value.copy(completed=WorkoutEntity("finish-voice",ended-600_000,ended,RunMode.CUSTOM.name,null,600_000,1000.0,1200,1000.0,1200))
+                app.voice.speak(VoiceCatalog.get("jieshu"))
+            }
+            compose.waitUntil(15000) {org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();app.voice.playingId.value=="jieshu" && compose.onAllNodesWithText("本次训练完成").fetchSemanticsNodes().isNotEmpty()}
+            compose.onNode(hasText("天依："+VoiceCatalog.get("jieshu").text) and hasAnyAncestor(isDialog())).assertIsDisplayed()
+            capture("workout-finish-voice",dialog=true)
+        } finally {compose.runOnUiThread {app.voice.cancel()};org.robolectric.shadows.ShadowMediaPlayer.resetStaticState()}
+    }
     private fun capture(name:String,dialog:Boolean=false) {
         val file=File("build/qa/native-$name.png");file.parentFile?.mkdirs()
         file.outputStream().use {output ->

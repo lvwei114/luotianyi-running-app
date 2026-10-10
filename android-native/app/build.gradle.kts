@@ -13,8 +13,8 @@ android {
         applicationId = "com.luotianyi.running.nativeapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.1.7-native-test"
+        versionCode = 9
+        versionName = "0.1.8-native-test"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

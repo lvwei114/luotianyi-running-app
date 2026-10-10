@@ -21,7 +21,7 @@ data class PlaylistDetail(val playlist:PlaylistEntity,val songs:List<SongEntity>
 data class AppUiState(
     val settings:AppSettings=AppSettings(),val settingsLoaded:Boolean=false,val workoutsLoaded:Boolean=false,
     val workouts:List<WorkoutEntity> = emptyList(),val songs:List<SongEntity> = emptyList(),val playlists:List<PlaylistEntity> = emptyList(),
-    val run:RunState=RunState(),val music:MusicState=MusicState(),val hr:HrState=HrState(),val subtitle:String="",
+    val run:RunState=RunState(),val music:MusicState=MusicState(),val hr:HrState=HrState(),val subtitle:String="",val speakingVoiceId:String="",
     val backgrounds:List<BackgroundEntry> = emptyList(),val albums:List<Album> = emptyList(),
     val error:String?=null,val recovering:Boolean=true,val importProgress:ImportProgress=ImportProgress(),
     val detecting:Set<String> = emptySet(),val detail:WorkoutDetail?=null,val playlistDetail:PlaylistDetail?=null,val today:LocalDate=LocalDate.now(),
@@ -33,6 +33,7 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
     private val messageQueue=Channel<String>(Channel.UNLIMITED);val messages=messageQueue.receiveAsFlow()
     private val backgrounds=BackgroundRepository(app);private var lastImported:List<SongEntity> = emptyList();private var importTarget:String?=null;private var importName=""
     private var preview:NativeMetronome?=null;private var previewJob:Job?=null;private var previewGeneration=0L
+    private var auditioning=false
     init {
         launchHandled {app.settingsRepository.settings.collect {s->mutable.update {it.copy(settings=s,settingsLoaded=true)}}}
         launchHandled {app.workoutRepository.workouts.collect {w->mutable.update {it.copy(workouts=w,workoutsLoaded=true)}}}
@@ -45,6 +46,7 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
         }}
         launchHandled {while(currentCoroutineContext().isActive) {val hr=app.heartRate.state.value;mutable.update {it.copy(hr=hr.copy(bpm=app.heartRate.freshBpm()))};delay(1000)}}
         launchHandled {app.voice.subtitle.collect {text->mutable.update {it.copy(subtitle=text)}}}
+        launchHandled {app.voice.playingId.collect {id->mutable.update {it.copy(speakingVoiceId=id)}}}
         launchHandled {app.message.collect {text->if(text.isNotEmpty())message(text)}}
         launchHandled {app.recovering.collect {value->mutable.update {it.copy(recovering=value)}}}
         refreshBackgrounds()
@@ -62,7 +64,7 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
         if(state.value.busy || state.value.recovering)return
         if(state.value.run.recoveryError.isNotEmpty()) {message("请先恢复上次训练记录");return}
         if(state.value.run.saveError.isNotEmpty()) {message("请先重试保存上一条记录");return}
-        stopPreview();RunService.command(app,"START",mode)
+        stopPreview();stopVoicePreview();RunService.command(app,"START",mode)
     }
     fun runCommand(command:String)=RunService.command(app,command)
     fun clearAlert() {app.runState.value=app.runState.value.copy(alert="")}
@@ -128,6 +130,7 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
     fun avatar(uri:Uri)=launchHandled {val path=backgrounds.add(uri,"avatars");app.settingsRepository.update {it.copy(avatar=path)}}
     fun previewTone(tone:String) {
         settings {it.copy(beatTone=tone)};if(state.value.busy)return
+        stopVoicePreview()
         stopPreview()
         if(!app.audioFocus.acquire()) {message("暂时无法试听，请稍后重试");return}
         val generation=++previewGeneration
@@ -138,13 +141,20 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
             finally {if(generation==previewGeneration)stopPreview()}
         }
     }
+    fun previewVoice(line:VoiceLine) {
+        if(state.value.busy) {message("训练中请使用自动播报，结束后可试听语音");return}
+        stopPreview()
+        if(!app.audioFocus.acquire()) {message("暂时无法试听，请稍后重试");return}
+        auditioning=true;app.voice.preview(line)
+    }
+    fun stopVoicePreview() {if(auditioning) {auditioning=false;app.voice.cancel()}}
     private fun stopPreview() {previewGeneration++;previewJob?.cancel();previewJob=null;preview?.stop();preview=null;app.audioFocus.previewActive=false;app.music.duckPreview(false);app.audioFocus.releaseIfIdle()}
     fun export(uri:Uri)=launchHandled {DataTransfer(app).export(uri);message("记录、歌单和设置已导出；音频和图片请另外保留")}
     fun importBackup(uri:Uri)=launchHandled {check(!state.value.busy && !state.value.importProgress.running) {"请结束训练和文件导入后再恢复备份"};val count=DataTransfer(app).import(uri);message("已导入 $count 条 GPS 记录；歌曲需先导入，歌单按文件标识或唯一名称匹配");refreshBackgrounds()}
     fun dismissError()=mutable.update {it.copy(error=null)}
     fun message(text:String) {if(text.isNotEmpty())messageQueue.trySend(text)}
     private fun launchHandled(block:suspend ()->Unit)=viewModelScope.launch {try {block()} catch(e:CancellationException) {throw e} catch(e:Exception) {mutable.update {it.copy(error=e.message ?: "操作失败，请重试")}}}
-    override fun onCleared() {stopPreview();messageQueue.close();super.onCleared()}
+    override fun onCleared() {stopPreview();stopVoicePreview();messageQueue.close();super.onCleared()}
     class Factory(private val app:RunningApplication):ViewModelProvider.Factory {
         override fun <T:ViewModel> create(modelClass:Class<T>):T {require(modelClass.isAssignableFrom(AppViewModel::class.java));@Suppress("UNCHECKED_CAST") return AppViewModel(app) as T}
     }

@@ -32,8 +32,8 @@ class RunService:Service(),LocationListener,SensorEventListener {
     private var startedAt=0L;private var id="";private var settings=AppSettings()
     private val samples=mutableListOf<HeartRateSampleEntity>();private var lastHrSample=-5000L;private var lastCheckpoint=0L
     private var preparingAt=0L;private var preparationJob:Job?=null;private var pulseJob:Job?=null;private var checkpointJob:Job?=null
-    private var nextWater=0L;private var nextCheer=0L;private var lastStage=-1;private var lastNotice=0L;private var dangerAt=0L
-    private val cheerBag=mutableListOf<Pair<String,String>>()
+    private var dangerAt=0L
+    private val voiceCoach=WorkoutVoiceCoach()
     private var previousMusic=false;private var finalizing=false
     override fun onBind(intent:Intent?):IBinder?=null
     override fun onCreate() {
@@ -41,10 +41,8 @@ class RunService:Service(),LocationListener,SensorEventListener {
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("workout","跑步训练",NotificationManager.IMPORTANCE_LOW).apply {setSound(null,null);enableVibration(false)})
         scope.launch {app.music.state.collect {music->machine.updatePlaylistDuration(music.queue.sumOf {it.durationMillis})}}
         scope.launch {app.settingsRepository.settings.collect {s->
-            val hydrationChanged=settings.hydrationMinutes!=s.hydrationMinutes || settings.highTemp!=s.highTemp
             settings=s;machine.updateSettings(s);live.strideLength=s.estimatedStride
             beat.tone=s.beatTone;beat.volume=s.masterVolume/100f*s.beatVolume/100f
-            if(hydrationChanged)nextWater=machine.state.elapsedMs+waterInterval()
         }}
     }
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
@@ -59,9 +57,11 @@ class RunService:Service(),LocationListener,SensorEventListener {
                     settings=app.latestSettings
                     val mode=RunMode.fromStored(intent.getStringExtra("mode"));id=UUID.randomUUID().toString()
                     val now=SystemClock.elapsedRealtime();gps=RunDistanceTracker(now,false);live=RunDistanceTracker(now,true);live.strideLength=settings.estimatedStride;livePace.reset()
-                    samples.clear();lastHrSample=-5000;lastStage=-1;startedAt=0;finalizing=false;lastNotice=0;dangerAt=0;lastCheckpoint=0;previousMusic=false;cheerBag.clear()
+                    samples.clear();lastHrSample=-5000;startedAt=0;finalizing=false;dangerAt=0;lastCheckpoint=0;previousMusic=false
                     machine.prepare(mode,settings,app.music.state.value.queue.sumOf {it.durationMillis});app.runState.value=RunState(sessionId=id,training=machine.state,status="GPS 预热中，可跳过等待")
+                    voiceCoach.reset(machine.state,settings);app.voice.cancel()
                     foreground();startMeasurements();preparingAt=now
+                    if(settings.hydrationMinutes>0)say(voiceCoach.beforeWater())
                     preparationJob=scope.launch {while(machine.state.phase==RunPhase.PREPARING) {
                         delay(500)
                         if(SystemClock.elapsedRealtime()-preparingAt>=20000 || (gps.accuracy!=null && gps.accuracy<=20 && SystemClock.elapsedRealtime()-preparingAt>3000))begin()
@@ -73,6 +73,8 @@ class RunService:Service(),LocationListener,SensorEventListener {
                 "RESUME" -> resume()
                 "TOGGLE" -> if(machine.state.phase==RunPhase.RUNNING)pause() else resume()
                 "FINISH" -> finishWorkout()
+                "END_HINT" -> if(machine.state.phase==RunPhase.RUNNING &&
+                    (app.heartRate.freshBpm()?.takeIf {settings.withWearable}?.let(settings::hrPercent)?.let {it<90} != false))say(voiceCoach.endHint())
                 "MODE" -> {machine.changeMode(RunMode.fromStored(intent.getStringExtra("mode")));publish()}
                 "MUSIC_TOGGLE" -> app.music.toggle()
                 "MUSIC_NEXT" -> app.music.next()
@@ -94,8 +96,7 @@ class RunService:Service(),LocationListener,SensorEventListener {
         app.audioFocus.workoutActive=true;acquireWakeLock();beat.bpm=machine.state.bpm;beat.volume=settings.masterVolume/100f*settings.beatVolume/100f;beat.tone=settings.beatTone;beat.start()
         app.music.repeatWorkout=machine.state.mode==RunMode.TIMED;app.music.playedIds.clear()
         if(machine.state.mode==RunMode.FOLLOW) {app.music.setMode("smart");scope.launch {app.settingsRepository.update {it.copy(musicMode="smart")}}}
-        app.music.play();app.voice.cancel();app.voice.speak("zhunbei","准备好啦，跟天依一起出发吧！")
-        nextWater=waterInterval();scheduleCheer();pulseJob?.cancel()
+        app.music.play();app.voice.cancel();say(voiceCoach.opening());pulseJob?.cancel()
         pulseJob=scope.launch {while(isActive && machine.state.phase!=RunPhase.FINISHED) {tick();delay(250)}}
         publish()
     }
@@ -105,42 +106,42 @@ class RunService:Service(),LocationListener,SensorEventListener {
         if(machine.state.phase==RunPhase.FINISHED) {finishWorkout();return}
         gps.setRunning(false,now);live.setRunning(false,now);livePace.reset();beat.stop();releaseWakeLock()
         previousMusic=app.music.player.isPlaying;app.music.player.pause();app.audioFocus.workoutActive=false;app.audioFocus.releaseIfIdle()
-        app.voice.cancel();if(announce)app.voice.speak("zanting","运动暂停，休息一下再继续吧");checkpoint();publish()
+        app.voice.cancel();if(announce)say(voiceCoach.paused());checkpoint();publish()
     }
     private fun resume() {
         if(machine.state.phase!=RunPhase.PAUSED)return
         if(!app.audioFocus.acquire())return
         val now=SystemClock.elapsedRealtime();machine.resume(now);gps.setRunning(true,now);live.setRunning(true,now);livePace.reset();above=false;confirmation=0;dangerAt=0
-        app.audioFocus.workoutActive=true;acquireWakeLock();beat.start();if(previousMusic)app.music.play();app.voice.cancel();app.voice.speak("kaishi","继续运动，加油呀！");publish()
+        app.audioFocus.workoutActive=true;acquireWakeLock();beat.start();if(previousMusic)app.music.play();app.voice.cancel();say(voiceCoach.resumed(machine.state.elapsedMs));publish()
     }
     private fun tick() {
-        if(machine.state.phase!=RunPhase.RUNNING)return
         val now=SystemClock.elapsedRealtime();val hr=app.heartRate.freshBpm(now).takeIf {settings.withWearable}
+        if(machine.state.phase==RunPhase.PAUSED) {
+            voiceCoach.recovery(now,settings,hr?.let(settings::hrPercent),app.voice.isBusy)?.let(::say)
+            publish();return
+        }
+        if(machine.state.phase!=RunPhase.RUNNING)return
         machine.tick(now,hr);live.update(now)
         if(machine.state.phase==RunPhase.FINISHED) {finishWorkout();return}
         acquireWakeLock();beat.bpm=machine.state.bpm;app.music.heartRate=hr
-        if(machine.state.stageIndex!=lastStage) {
-            lastStage=machine.state.stageIndex
-            val voice=if(machine.state.mode==RunMode.FOLLOW)listOf("reshen","ranzhi","maikaibu","chongci")[lastStage] else if(machine.state.mode==RunMode.CUSTOM)"maikaibu" else listOf("reshen","ranzhi","chongci","fangsong")[lastStage]
-            app.voice.speak(voice,"${machine.state.stageName}阶段，保持呼吸，跟着天依的节奏")
-        }
         if(hr!=null && machine.state.elapsedMs-lastHrSample>=5000) {samples.add(HeartRateSampleEntity(id,machine.state.elapsedMs,hr));lastHrSample=machine.state.elapsedMs}
-        if(settings.hydrationMinutes>0 && machine.state.elapsedMs>=nextWater) {nextWater=machine.state.elapsedMs+waterInterval();app.voice.speak("water_a","喝几口水，调整呼吸再继续哦")}
-        if(settings.chatFrequency!="off" && machine.state.elapsedMs>=nextCheer) {
-            scheduleCheer();if(cheerBag.isEmpty())cheerBag.addAll(listOf("jiayou" to "加油哦，天依相信你！","jianchi" to "再坚持一下下，就快到啦","huxi" to "稳住呼吸，跟着节拍一起哦","henbang" to "很棒很棒，就是这个节奏！","songjian" to "肩膀放松，天依陪你跑","zaiyici" to "再坚持一下，胜利就在前面啦","maikaibu" to "迈开步子，跑出属于自己的节奏","chongya" to "冲鸭，天依陪着你！").shuffled());val cheers=cheerBag.removeAt(0);app.voice.speak(cheers.first,cheers.second)
-        }
         if(settings.safetyEnabled && hr!=null) {
             val percent=settings.hrPercent(hr)
-            if(percent>=100) {if(dangerAt==0L)dangerAt=now;if(now-dangerAt>=15000) {app.runState.value=app.runState.value.copy(alert="心率持续达到最大心率，已暂停。请休息后手动继续。");pause();return}}
+            if(percent>=100) {if(dangerAt==0L)dangerAt=now;if(now-dangerAt>=15000) {
+                app.runState.value=app.runState.value.copy(alert="心率持续达到最大心率，已暂停。请休息后手动继续。")
+                pause(false);say(voiceCoach.safetyStop(percent,now));return
+            }}
             else dangerAt=0
-            if(percent>=90 && (lastNotice==0L || now-lastNotice>60000)) {lastNotice=now;app.runState.value=app.runState.value.copy(alert="心率较高，请放慢节奏");app.voice.speak("hr_l3_a","心率提醒：请放慢节奏，注意身体感受")}
         } else dangerAt=0
+        voiceCoach.next(machine.state,settings,hr?.let(settings::hrPercent),app.voice.isBusy,now)?.let {emission->
+            if(emission.line.category==VoiceCategory.HR_LOW)app.runState.value=app.runState.value.copy(alert="心率较高，请放慢节奏")
+            say(emission)
+        }
         if(now-lastCheckpoint>=5000) {lastCheckpoint=now;checkpoint()}
         publish()
         if(now%1000<250 && (Build.VERSION.SDK_INT<33 || ContextCompat.checkSelfPermission(this,Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED)) getSystemService(NotificationManager::class.java).notify(42,notification())
     }
-    private fun waterInterval()=(settings.hydrationMinutes*60_000L*(if(settings.highTemp).75 else 1.0)).toLong()
-    private fun scheduleCheer() {val interval=when(settings.chatFrequency) {"sparse"->(90..140).random();"dense"->(18..30).random();else->(35..55).random()};nextCheer=machine.state.elapsedMs+interval*1000L}
+    private fun say(emission:CoachEmission)=app.voice.speak(emission.line,emission.priority,emission.lifetimeMs,emission.allowQueue)
     private fun record():WorkoutEntity {
         val metrics=WorkoutMetrics.measured(machine.state.elapsedMs,gps.steps,GpsRecordChannel(gps.gpsMeters,gps.gpsStepMeters,gps.gpsSteps))
         return WorkoutEntity(id,startedAt,System.currentTimeMillis(),machine.state.mode.name,if(machine.state.mode==RunMode.TIMED)(machine.state.totalMs/60000).toInt() else null,metrics.elapsedMillis,metrics.gpsMeters,metrics.totalSteps,metrics.gpsStepMeters,metrics.gpsSteps)
@@ -152,10 +153,10 @@ class RunService:Service(),LocationListener,SensorEventListener {
     }
     private fun finishWorkout() {
         if(finalizing)return
-        if(machine.state.phase==RunPhase.PREPARING) {cleanup();app.runState.value=RunState(status="已取消准备");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return}
+        if(machine.state.phase==RunPhase.PREPARING) {app.voice.cancel();cleanup();app.runState.value=RunState(status="已取消准备");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return}
         if(startedAt==0L)return
         finalizing=true;val now=SystemClock.elapsedRealtime();machine.finish(now);gps.setRunning(false,now);live.setRunning(false,now);livePace.reset()
-        beat.stop();releaseWakeLock();app.music.player.pause();app.music.repeatWorkout=false;app.audioFocus.workoutActive=false;app.audioFocus.releaseIfIdle();app.voice.cancel();app.voice.speak("jieshu","训练完成啦，记得拉伸放松哦")
+        beat.stop();releaseWakeLock();app.music.player.pause();app.music.repeatWorkout=false;app.audioFocus.workoutActive=false;app.audioFocus.releaseIfIdle();app.voice.cancel();voiceCoach.finish(settings).forEach(::say)
         app.heartRate.freshBpm()?.takeIf {settings.withWearable}?.let {hr->if(samples.lastOrNull()?.elapsedMillis!=machine.state.elapsedMs)samples.add(HeartRateSampleEntity(id,machine.state.elapsedMs,hr))}
         val w=record();val hr=samples.toList();publish();app.runState.value=app.runState.value.copy(completed=w,samples=hr,saving=true)
         scope.launch {

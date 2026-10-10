@@ -143,10 +143,10 @@ fun stride(value:Double?)=value?.let {String.format(Locale.ROOT,"%.2f m/步",it)
             RunPhase.PAUSED->Button(onClick={vm.runCommand("RESUME")},modifier=Modifier.fillMaxWidth()) {Text("继续运动")}
             RunPhase.IDLE,RunPhase.FINISHED->Button(onClick={start(s.legacyMode)},enabled=!run.saving && run.saveError.isEmpty(),modifier=Modifier.fillMaxWidth()) {Text("开始跑步")}
             else->{}
-        };if(t.phase in listOf(RunPhase.RUNNING,RunPhase.PAUSED))OutlinedButton(onClick={confirmEnd=true},modifier=Modifier.fillMaxWidth()) {Text("结束并保存记录")};if(run.saveError.isNotEmpty()) {Text(run.saveError,color=MaterialTheme.colorScheme.error);Button(onClick=vm::retrySave) {Text("重试保存记录")}}}}
+        };if(t.phase in listOf(RunPhase.RUNNING,RunPhase.PAUSED))OutlinedButton(onClick={confirmEnd=true;vm.runCommand("END_HINT")},modifier=Modifier.fillMaxWidth()) {Text("结束并保存记录")};if(run.saveError.isNotEmpty()) {Text(run.saveError,color=MaterialTheme.colorScheme.error);Button(onClick=vm::retrySave) {Text("重试保存记录")}}}}
         item {Text(if(t.stageIndex==0)"先活动关节，放松肩膀，逐步增加强度。" else if(t.stageIndex==3)"慢走调整呼吸，结束后做轻柔拉伸。" else "保持自然呼吸，身体不舒服时停下来。",style=MaterialTheme.typography.bodySmall)}
     }
-    if(confirmEnd)AlertDialog(onDismissRequest={confirmEnd=false},title={Text("结束本次训练？")},text={Text("将保存距离、步频、步幅和心率记录。")},confirmButton={TextButton(onClick={confirmEnd=false;vm.runCommand("FINISH")}) {Text("结束并保存")}},dismissButton={TextButton(onClick={confirmEnd=false}) {Text("继续训练")}})
+    if(confirmEnd)AlertDialog(onDismissRequest={confirmEnd=false},title={Text("结束本次训练？")},text={Text("结束前建议慢走、调整呼吸。确认后将保存距离、步频、步幅和心率记录。")},confirmButton={TextButton(onClick={confirmEnd=false;vm.runCommand("FINISH")}) {Text("结束并保存")}},dismissButton={TextButton(onClick={confirmEnd=false}) {Text("继续训练")}})
 }
 @Composable private fun RunHero(meters:Double,elapsedMs:Long,livePace:Double?) {
     Surface(Modifier.fillMaxWidth().testTag("run-hero"),shape=RoundedCornerShape(26.dp),color=AppSurface) {
