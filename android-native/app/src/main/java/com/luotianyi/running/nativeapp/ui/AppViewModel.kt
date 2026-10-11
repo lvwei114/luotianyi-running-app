@@ -25,6 +25,7 @@ data class AppUiState(
     val backgrounds:List<BackgroundEntry> = emptyList(),val albums:List<Album> = emptyList(),
     val error:String?=null,val recovering:Boolean=true,val importProgress:ImportProgress=ImportProgress(),
     val detecting:Set<String> = emptySet(),val detail:WorkoutDetail?=null,val playlistDetail:PlaylistDetail?=null,val today:LocalDate=LocalDate.now(),
+    val streakMilestone:StreakMilestone?=null,
 ) {
     val busy get()=run.training.phase in listOf(RunPhase.RUNNING,RunPhase.PAUSED,RunPhase.PREPARING) || run.saving
 }
@@ -36,7 +37,9 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
     private var auditioning=false
     init {
         launchHandled {app.settingsRepository.settings.collect {s->mutable.update {it.copy(settings=s,settingsLoaded=true)}}}
-        launchHandled {app.workoutRepository.workouts.collect {w->mutable.update {it.copy(workouts=w,workoutsLoaded=true)}}}
+        launchHandled {combine(app.workoutRepository.workouts,app.settingsRepository.seenStreakMilestones,state.map {it.today}.distinctUntilChanged()) {w,seen,today->
+            w to RunStreaks.calculate(w,today).milestone?.takeUnless {it.key in seen}
+        }.collect {(w,milestone)->mutable.update {it.copy(workouts=w,workoutsLoaded=true,streakMilestone=milestone)}}}
         launchHandled {app.database.music().observeSongs().collect {songs->mutable.update {it.copy(songs=songs)}}}
         launchHandled {app.database.music().observePlaylists().collect {p->mutable.update {it.copy(playlists=p)}}}
         launchHandled {app.runState.collect {run->mutable.update {it.copy(run=run)}}}
@@ -54,6 +57,11 @@ class AppViewModel(private val app:RunningApplication):ViewModel() {
         launchHandled {while(currentCoroutineContext().isActive) {delay(30000);mutable.update {it.copy(today=LocalDate.now())}}}
     }
     fun settings(change:(AppSettings)->AppSettings)=launchHandled {app.settingsRepository.update(change)}
+    fun dismissStreakMilestone()=launchHandled {
+        val milestone=state.value.streakMilestone ?: return@launchHandled
+        app.settingsRepository.acknowledgeStreakMilestone(milestone.key)
+        mutable.update {it.copy(streakMilestone=null)}
+    }
     fun setTimedMinutes(value:Int) {if(!state.value.busy)settings {it.copy(timedMinutes=value.coerceIn(5,60))}}
     fun setLegacyMode(mode:RunMode) {
         if(state.value.busy) {if(state.value.run.training.mode==RunMode.TIMED || mode==RunMode.TIMED) {message("本次定时跑不能切换跑法");return};RunService.command(app,"MODE",mode)}

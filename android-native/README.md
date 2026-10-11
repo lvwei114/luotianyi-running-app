@@ -4,11 +4,11 @@
 
 使用 Kotlin、Jetpack Compose、Room、DataStore 和 Media3。源码位于 fork 的 `android-native/`，支持 Android 8.0（API 26）及以上。
 
-**当前测试版：v0.1.8** · `0.1.8-native-test` · versionCode 9
+**当前版本：v1.0.0** · `1.0.0` · versionCode 10
 
-v0.1.8 接入全部 59 条本地语音及对应字幕，增加分类试听；热身节拍提升到 150–160 BPM，四阶段曲线与跑法切换采用平滑过渡。
+v1.0.0 将定时跑整合进首页跑法选择，新增连续跑步状态图标和每 5 天的祝贺弹窗，优化图标清晰度并更换应用图标。保留全部 59 条本地语音、字幕、分类试听和连续四阶段 BPM 曲线。
 
-[下载测试 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v0.1.8-native-test) · [更新说明](docs/v0.1.8改进说明.md) · [已发布版本](https://github.com/lvwei114/luotianyi-running-app/releases) · [功能清单](docs/功能迁移清单.md) · [fork 首页](https://github.com/lvwei114/luotianyi-running-app)
+[下载 APK](https://github.com/lvwei114/luotianyi-running-app/releases/tag/v1.0.0) · [更新说明](docs/v1.0.0更新说明.md) · [已发布版本](https://github.com/lvwei114/luotianyi-running-app/releases) · [功能清单](docs/功能迁移清单.md) · [fork 首页](https://github.com/lvwei114/luotianyi-running-app)
 
 ## 功能
 
@@ -25,13 +25,13 @@ v0.1.8 接入全部 59 条本地语音及对应字幕，增加分类试听；热
 
 ## 预览
 
-![首页与记录页](docs/images/ui-cleanup/home-records.png)
+以下为当前 v1.0.0 重新渲染的 Compose 原生界面，训练记录与连续天数为示例数据。
 
-![跑步与记录详情](docs/images/ui-cleanup/workout-detail.png)
+| 首页 | 定时跑 | 运动界面 |
+| --- | --- | --- |
+| <img src="docs/images/v1.0.0/streak-icon3.png" width="250"> | <img src="docs/images/v1.0.0/home-timed-integrated.png" width="250"> | <img src="docs/images/v1.0.0/workout-moving-small.png" width="250"> |
 
-![设置页](docs/images/ui-cleanup/settings-overview.png)
-
-上述为 v0.1.6 的 Compose 原生界面渲染，训练数值为示例数据；v0.1.7 将定时跑名称和版本号更新。[界面调整说明](docs/界面精简改进说明.md) · [首页问候语说明](docs/首页问候语改进说明.md)。
+[更多截图](docs/images/v1.0.0/) · [60 秒介绍视频](https://github.com/lvwei114/luotianyi-running-app/releases/download/v1.0.0/Luotianyi-Running-v1.0.0-intro.mp4)
 
 ## 构建
 
@@ -52,6 +52,8 @@ v0.1.8 接入全部 59 条本地语音及对应字幕，增加分类试听；热
 构建产物：`app/build/outputs/apk/debug/app-debug.apk`。APK 通过 GitHub Releases 分发，源码仓库排除安装包、构建缓存、个人 SDK 路径和签名密钥。
 
 ## 验证与安装
+
+v1.0.0 已完成打包，69 项 JVM／Robolectric 测试通过，Lint 0 错误、18 条提示。版本、应用名、新图标、59 条语音资源、APK 完整性和 v2 签名检查通过；沿用此前原生版本的调试签名，证书与 v0.1.8 一致，可覆盖更新同签名版本。详见 [v1.0.0 更新说明](docs/v1.0.0更新说明.md)。
 
 v0.1.8 已完成本地测试 APK 打包。同一功能代码在打包前通过 63 项 JVM/Robolectric 测试及 Lint 检查，Lint 0 错误、17 条提示。应用名、版本、59 条语音资源、APK 完整性、SHA256 和 v2 签名检查均通过，签名与 v0.1.7 一致，支持覆盖安装该版本；详见 [v0.1.8 更新说明](docs/v0.1.8改进说明.md)。语音字幕和跟拍舒适度仍需真机验证。
 

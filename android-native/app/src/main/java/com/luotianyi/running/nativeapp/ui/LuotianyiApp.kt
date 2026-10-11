@@ -25,6 +25,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
+import com.luotianyi.running.nativeapp.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.luotianyi.running.nativeapp.domain.*
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +115,25 @@ enum class AppTab(val label:String) { HOME("首页"),RUN("记录"),MUSIC("音乐
         val detail=WorkoutDetail(state.run.completed!!,state.run.samples)
         WorkoutDetailDialog(detail,vm,{summary=false;vm.dismissSummary()},false,state.run.saving,state.run.saveError)
     }
+    state.streakMilestone?.takeIf {
+        state.settingsLoaded && state.settings.disclaimerAccepted && !state.busy && !state.recovering &&
+            state.run.completed==null && state.detail==null && state.error==null && state.run.alert.isEmpty()
+    }?.let {StreakMilestoneDialog(it.days,vm::dismissStreakMilestone)}
     if(state.run.alert.isNotEmpty())AlertDialog(onDismissRequest=vm::clearAlert,title={Text("运动提醒")},text={Text(state.run.alert)},confirmButton={TextButton(onClick=vm::clearAlert) {Text("知道了")}})
     state.error?.let {error->AlertDialog(onDismissRequest=vm::dismissError,title={Text("操作未完成")},text={Text(error)},confirmButton={TextButton(onClick=vm::dismissError) {Text("知道了")}})}
     if(state.settingsLoaded && !state.settings.disclaimerAccepted)AlertDialog(onDismissRequest={},title={Text("开始前请了解")},text={Text("运动数据和个人信息保存在本机。心率与 GPS 会有误差，心率提醒不能代替医疗判断。身体不舒服时请停止运动。\n\n洛天依陪跑使用现有本地语音；记录距离只取 GPS，定位缺失路段不补算。")},confirmButton={Button(onClick={vm.settings {it.copy(disclaimerAccepted=true)}}) {Text("我已了解")}})
+}
+
+@Composable internal fun StreakMilestoneDialog(days:Int,close:()->Unit) {
+    AlertDialog(onDismissRequest=close,
+        title={Text("坚持的你，真棒！")},
+        text={Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(18.dp)) {
+            Image(painterResource(R.drawable.streak_icon5),contentDescription=null,modifier=Modifier.size(200.dp),contentScale=ContentScale.Fit)
+            Text("你已经坚持${days}天了！天依觉得你好棒！")
+        }},
+        confirmButton={Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
+            Button(onClick=close,modifier=Modifier.widthIn(min=180.dp).heightIn(min=56.dp)) {
+                Text("继续加油",fontSize=18.sp,fontWeight=FontWeight.SemiBold)
+            }
+        }})
 }

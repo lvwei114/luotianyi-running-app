@@ -13,12 +13,12 @@ android {
         applicationId = "com.luotianyi.running.nativeapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.1.8-native-test"
+        versionCode = 10
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     androidResources { noCompress += "wav" }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

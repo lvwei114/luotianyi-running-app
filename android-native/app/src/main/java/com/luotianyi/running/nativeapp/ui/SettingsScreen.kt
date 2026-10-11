@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import com.luotianyi.running.nativeapp.data.*
+import com.luotianyi.running.nativeapp.BuildConfig
 import com.luotianyi.running.nativeapp.domain.VoiceCatalog
 import com.luotianyi.running.nativeapp.domain.VoiceCategory
 import kotlin.math.roundToInt
@@ -73,7 +74,7 @@ import kotlin.math.roundToInt
         }}
         item {Panel("关于洛天依陪跑") {
             Text("原生版作者：绿卫",style=MaterialTheme.typography.bodyMedium)
-            Text("版本 0.1.7 · 原生测试版",color=RunOrange)
+            Text("版本 ${BuildConfig.VERSION_NAME}",color=RunOrange)
             Text("原项目作者：Cory\n哔哩哔哩：本人内心十分开朗\n代码协议：MIT License\nGPT-SoVITS 模型：只想干饭的麦克斯韦妖\n洛天依声音与形象版权：上海禾念信息科技有限公司",style=MaterialTheme.typography.bodySmall)
             Text("项目：github.com/w8888-hh/luotianyi-running-app\n语音模型：github.com/xdedmmc2/GPT-SoVITS-Luo-Tianyi",style=MaterialTheme.typography.bodySmall)
         }}

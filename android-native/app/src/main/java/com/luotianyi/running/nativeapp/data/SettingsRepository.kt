@@ -30,6 +30,14 @@ data class AppSettings(
 class SettingsRepository(context: Context) {
     private val store=context.applicationContext.appPreferences
     private val key=stringPreferencesKey("nativeSettings.v1")
+    private val milestoneKey=stringPreferencesKey("streakMilestones.v1")
+    val seenStreakMilestones=store.data.map {prefs->
+        prefs[milestoneKey]?.split('\n')?.filter {it.isNotBlank()}?.toSet() ?: emptySet()
+    }
+    suspend fun acknowledgeStreakMilestone(value:String) {store.edit {prefs->
+        val seen=prefs[milestoneKey]?.split('\n')?.filter {it.isNotBlank()}.orEmpty()
+        prefs[milestoneKey]=(seen+value).distinct().joinToString("\n")
+    }}
     val settings=store.data.map(::read)
     private fun read(values: Preferences): AppSettings {
         val raw=values[key] ?: return AppSettings(); val j=JSONObject(raw); val defaults=AppSettings()

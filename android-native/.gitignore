@@ -10,8 +10,9 @@ local.properties
 .env
 .env.*
 *.log
+intro-v1.0.0/
 
-# Parent repository ignores folders named data; these contain application source.
+# Parent repository ignores data folders; these are application source.
 !app/src/main/java/com/luotianyi/running/nativeapp/data/
 !app/src/main/java/com/luotianyi/running/nativeapp/data/**
 !app/src/test/java/com/luotianyi/running/nativeapp/data/

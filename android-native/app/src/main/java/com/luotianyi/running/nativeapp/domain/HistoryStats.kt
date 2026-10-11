@@ -16,7 +16,7 @@ object HistoryStats {
     fun week(records:List<WorkoutEntity>,date:LocalDate=LocalDate.now(),zone:ZoneId=ZoneId.systemDefault()):WeekStats {
         val monday=date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));val start=monday.atStartOfDay(zone).toInstant().toEpochMilli();val end=monday.plusWeeks(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val selected=records.filter {it.startedAt in start until end};val total=summary(selected)
-        val days=records.map {Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate()}.toSet();var streak=0;var current=date;if(current !in days)current=current.minusDays(1);while(current in days) {streak++;current=current.minusDays(1)}
+        val streak=RunStreaks.calculate(records,date,zone).days
         return WeekStats(total.runs,total.meters,total.elapsedMs,total.cadence,total.stride,total.pace,List(7) {i->selected.filter {Instant.ofEpochMilli(it.startedAt).atZone(zone).dayOfWeek.value==i+1}.sumOf {it.elapsedMillis}},streak)
     }
 }

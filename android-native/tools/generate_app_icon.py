@@ -1,12 +1,25 @@
 """Generate Android launcher resources from the supplied artwork (Pillow)."""
 from pathlib import Path
 import sys
-from PIL import Image, ImageDraw, ImageOps
+from io import BytesIO
+from PIL import Image, ImageCms, ImageDraw, ImageOps
 
 project = Path(__file__).resolve().parents[1]
 source = Path(sys.argv[1])
-art = ImageOps.fit(Image.open(source).convert("RGB"), (512, 512), method=Image.Resampling.LANCZOS)
+with Image.open(source) as original:
+    image = ImageOps.exif_transpose(original)
+    profile = original.info.get("icc_profile")
+    if profile:
+        image = ImageCms.profileToProfile(image, ImageCms.ImageCmsProfile(BytesIO(profile)), ImageCms.createProfile("sRGB"), outputMode="RGB")
+    else:
+        image = image.convert("RGB")
+    art = ImageOps.fit(image, (512, 512), method=Image.Resampling.LANCZOS)
 res = project / "app/src/main/res"
+background = "#" + "".join(f"{channel:02X}" for channel in art.getpixel((0, 0)))
+(res / "values/icon_colors.xml").write_text(
+    f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="app_icon_background">{background}</color>\n</resources>\n',
+    encoding="utf-8",
+)
 for density, size in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)]:
     folder = res / f"mipmap-{density}"
     folder.mkdir(parents=True, exist_ok=True)

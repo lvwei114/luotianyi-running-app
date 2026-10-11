@@ -25,6 +25,22 @@ import org.robolectric.annotation.LooperMode
 @LooperMode(LooperMode.Mode.PAUSED)
 class NavigationUiTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
+    @Test fun homeTimedChoiceShowsDurationOnlyWhenSelectedAndKeepsLegacyChoices() {
+        dismissIntroduction()
+        val app=compose.activity.application as RunningApplication
+        compose.waitUntil(15000) {app.latestSettings.disclaimerAccepted && !app.recovering.value}
+        compose.onNodeWithText("分钟（5–60）").assertDoesNotExist()
+        compose.onNodeWithText("暂停不计时，到点结束。").assertDoesNotExist()
+        capture("home-integrated")
+        compose.onNode(hasText("定时跑") and hasClickAction()).performClick()
+        compose.onNodeWithText("分钟（5–60）").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("开始定时跑").performScrollTo().assertIsEnabled()
+        capture("home-timed-integrated")
+        compose.onNode(hasText("自定义 BPM") and hasClickAction()).performScrollTo().performClick()
+        compose.onNodeWithText("分钟（5–60）").assertDoesNotExist()
+        compose.onNodeWithText("开始定时跑").assertDoesNotExist()
+        compose.onNodeWithText("开始跑步").performScrollTo().assertIsEnabled()
+    }
     @Test @Config(qualifiers="w360dp-h640dp-mdpi")
     fun acceptedWorkoutOpensSeparateScreenAndCanBeMinimizedWithoutStopping() {
         dismissIntroduction()
@@ -107,7 +123,8 @@ class NavigationUiTest {
             if(tab=="记录") {
                 compose.onNodeWithText("跑步记录与分析").assertIsDisplayed()
                 compose.onNodeWithText("${RunMode.TIMED.label} · 3.00 km").performScrollTo().performClick()
-                compose.onNodeWithText("平均步频").assertIsDisplayed()
+                compose.waitUntil(15000) {compose.onAllNodes(hasText("平均步频") and hasAnyAncestor(isDialog()),useUnmergedTree=true).fetchSemanticsNodes().isNotEmpty()}
+                compose.onNodeWithText("平均步频",useUnmergedTree=true).performScrollTo().assertIsDisplayed()
                 capture("record-detail-top",dialog=true)
                 compose.onNodeWithText("删除这条记录").performScrollTo()
                 capture("record-detail",dialog=true)
